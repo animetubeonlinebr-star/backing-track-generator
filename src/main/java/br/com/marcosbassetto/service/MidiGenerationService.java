@@ -1,6 +1,8 @@
 package br.com.marcosbassetto.service;
 
+import br.com.marcosbassetto.model.bass.BassConfig;
 import br.com.marcosbassetto.model.drum.DrumConfig;
+import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.music.BackingTrack;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 
@@ -18,12 +20,24 @@ public class MidiGenerationService {
     private final DrumConfig drumConfig;
     private final DrumMidiService drumMidiService;
     private final ChordService chordService;
+    private final GuitarConfig guitarConfig;
+    private final BassConfig bassConfig;
+    private final boolean enableDrums;
+    private final boolean enableGuitar;
+    private final boolean enableBass;
 
-    public MidiGenerationService(BackingTrack backingTrack, DrumConfig drumConfig) {
+    public MidiGenerationService(BackingTrack backingTrack, DrumConfig drumConfig,
+                                 GuitarConfig guitarConfig, BassConfig bassConfig,
+                                 boolean enableDrums, boolean enableGuitar, boolean enableBass) {
         this.backingTrack = backingTrack;
         this.drumConfig = drumConfig;
         this.drumMidiService = new DrumMidiService();
         this.chordService = new ChordService();
+        this.guitarConfig = guitarConfig != null ? guitarConfig : new GuitarConfig();
+        this.bassConfig = bassConfig;
+        this.enableDrums = enableDrums;
+        this.enableGuitar = enableGuitar;
+        this.enableBass = enableBass;
     }
 
     public void generate() {
@@ -73,7 +87,20 @@ public class MidiGenerationService {
         long totalTicks = (long) (totalMinutes * bpm * PPQ);
 
         addHarmonyTrack(sequence, backingTrack, timeInfo, totalTicks);
-        drumMidiService.generateDrumTrack(drumTrack, drumConfig, PPQ, totalTicks);
+        if (enableDrums) {
+            drumMidiService.generateDrumTrack(drumTrack, drumConfig, PPQ, totalTicks);
+        }
+        if (enableGuitar) {
+            guitarConfig.syncPatternTo(timeInfo);
+            new GuitarMidiService(guitarConfig, timeInfo)
+                    .generateGuitarTrack(sequence, backingTrack, totalTicks, PPQ);
+        }
+        if (enableBass) {
+            BassConfig effectiveBassConfig = bassConfig != null ? bassConfig : new BassConfig(timeInfo);
+            effectiveBassConfig.syncToTimeSignature(timeInfo);
+            new BassMidiService(effectiveBassConfig, timeInfo)
+                    .generateBassTrack(sequence, backingTrack, totalTicks, PPQ);
+        }
 
         return sequence;
     }

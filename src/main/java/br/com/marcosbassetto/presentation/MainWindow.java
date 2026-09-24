@@ -1,6 +1,8 @@
 package br.com.marcosbassetto.presentation;
 
+import br.com.marcosbassetto.model.bass.BassConfig;
 import br.com.marcosbassetto.model.drum.DrumConfig;
+import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.music.BackingTrack;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import br.com.marcosbassetto.service.MidiGenerationService;
@@ -20,9 +22,18 @@ public class MainWindow {
     private final JTextField txtDurationMin;
     private final JTextField txtDurationSeg;
     private final DrumConfig drumConfig;
+    private final GuitarConfig guitarConfig;
+    private final BassConfig bassConfig;
+
+    private JCheckBox chkGuitar;
+    private JCheckBox chkKeyboard;
+    private JCheckBox chkDrums;
+    private JCheckBox chkBass;
 
     public MainWindow() {
         drumConfig = new DrumConfig("4/4");
+        guitarConfig = new GuitarConfig();
+        bassConfig = new BassConfig(TimeSignatureInfo.parse("4/4"));
 
         frmMainFrame = new JFrame("Gerador de BackingTrack");
         setupWindow();
@@ -84,11 +95,48 @@ public class MainWindow {
         });
 
         JMenuItem mitBass = new JMenuItem("Bass");
+        mitBass.addActionListener(_ -> openBassConfig());
+
+        JMenuItem mitGuitar = new JMenuItem("Guitar");
+        mitGuitar.addActionListener(_ -> openGuitarConfig());
 
         mnuInstrument.add(mitDrum);
         mnuInstrument.add(mitBass);
+        mnuInstrument.add(mitGuitar);
         mnbMenuBar.add(mnuInstrument);
         frmMainFrame.add(mnbMenuBar);
+    }
+
+    private void openGuitarConfig() {
+        TimeSignatureInfo timeInfo = currentTimeSignatureOrWarn("configurar a guitarra");
+        if (timeInfo == null) {
+            return;
+        }
+
+        GuitarConfigWindow window = new GuitarConfigWindow(frmMainFrame, guitarConfig, timeInfo, null);
+        window.setVisible(true);
+    }
+
+    private void openBassConfig() {
+        TimeSignatureInfo timeInfo = currentTimeSignatureOrWarn("configurar o baixo");
+        if (timeInfo == null) {
+            return;
+        }
+
+        bassConfig.syncToTimeSignature(timeInfo);
+        BassConfigWindow window = new BassConfigWindow(frmMainFrame, bassConfig, timeInfo);
+        window.setVisible(true);
+    }
+
+    private TimeSignatureInfo currentTimeSignatureOrWarn(String action) {
+        String measureText = txtMeasure.getText();
+        if (measureText == null || measureText.isBlank() || !isMeasure(measureText)) {
+            JOptionPane.showMessageDialog(frmMainFrame,
+                    "Informe um compasso válido antes de " + action + ".\nEx: 4/4, 6/8.",
+                    "Compasso inválido", JOptionPane.WARNING_MESSAGE);
+            return null;
+        }
+        return TimeSignatureInfo.parse(measureText.trim());
     }
 
     private void setupLabelsAndFields() {
@@ -109,10 +157,15 @@ public class MainWindow {
     }
 
     private void setupCheckBoxes() {
-        frmMainFrame.add(createCheckBox("Guitar", 50, 300));
-        frmMainFrame.add(createCheckBox("KeyBoard", 50, 330));
-        frmMainFrame.add(createCheckBox("Drums", 50, 360));
-        frmMainFrame.add(createCheckBox("Bass", 50, 390));
+        chkGuitar = createCheckBox("Guitar", 50, 300);
+        chkKeyboard = createCheckBox("KeyBoard", 50, 330);
+        chkDrums = createCheckBox("Drums", 50, 360);
+        chkBass = createCheckBox("Bass", 50, 390);
+
+        frmMainFrame.add(chkGuitar);
+        frmMainFrame.add(chkKeyboard);
+        frmMainFrame.add(chkDrums);
+        frmMainFrame.add(chkBass);
     }
 
     private JButton createGenerateButton() {
@@ -133,7 +186,9 @@ public class MainWindow {
                         txtDurationMin.getText(),
                         txtDurationSeg.getText()
                 );
-                MidiGenerationService midiGenerationService = new MidiGenerationService(backingTrack, drumConfig);
+                MidiGenerationService midiGenerationService = new MidiGenerationService(
+                        backingTrack, drumConfig, guitarConfig, bassConfig,
+                        chkDrums.isSelected(), chkGuitar.isSelected(), chkBass.isSelected());
                 midiGenerationService.generate();
             } else {
                 JOptionPane.showMessageDialog(frmMainFrame, "DADOS INVÁLIDOS ❌", "Erro", JOptionPane.ERROR_MESSAGE);
