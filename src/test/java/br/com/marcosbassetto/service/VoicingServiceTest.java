@@ -67,6 +67,39 @@ class VoicingServiceTest {
         }
     }
 
+    /**
+     * As regiões de guitarra (43–64) e teclado (60–84) se tocam na faixa
+     * 60–64. Guitarra e teclado podem compartilhar uma nota ali (ex.: o D4 de
+     * G, Bb, Bm), sempre na borda — nunca no interior da região do outro.
+     * Documentado aqui para que a sobreposição não cresça sem ser notada.
+     */
+    @Test
+    void guitarAndKeyboardOverlapOnlyInTheBoundaryBand() {
+        for (String symbol : new String[]{"C", "G", "Am", "Dm", "G7", "F", "Bb", "Em", "Bm"}) {
+            ChordService chordService = new ChordService();
+            List<Integer> raw = chordService.getMidiNotes(symbol);
+
+            List<Integer> guitar = VoicingService.forGuitar(raw, null);
+            List<Integer> keyboard = VoicingService.forKeyboard(raw, null);
+
+            assertTrue(guitar.get(guitar.size() - 1) <= VoicingService.GUITAR_HIGH,
+                    symbol + ": guitarra passou do teto");
+            assertTrue(keyboard.get(0) >= VoicingService.KEYBOARD_LOW,
+                    symbol + ": teclado abaixo do piso");
+
+            for (int note : keyboard) {
+                assertTrue(note <= VoicingService.KEYBOARD_HIGH,
+                        symbol + ": teclado passou do teto");
+            }
+
+            // Nenhum teclado abaixo da guitarra; nenhuma guitarra acima do teclado.
+            assertTrue(keyboard.get(0) >= VoicingService.GUITAR_LOW,
+                    symbol + ": teclado invadiu o corpo da guitarra");
+            assertTrue(guitar.get(guitar.size() - 1) <= VoicingService.KEYBOARD_HIGH,
+                    symbol + ": guitarra invadiu o corpo do teclado");
+        }
+    }
+
     @Test
     void guitarVoiceLeadingMovesLessThanAFreshVoicing() {
         List<Integer> first = VoicingService.forGuitar(C, null);

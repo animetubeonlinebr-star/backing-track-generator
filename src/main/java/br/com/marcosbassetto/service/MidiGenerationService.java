@@ -3,6 +3,7 @@ package br.com.marcosbassetto.service;
 import br.com.marcosbassetto.model.bass.BassConfig;
 import br.com.marcosbassetto.model.drum.DrumConfig;
 import br.com.marcosbassetto.model.guitar.GuitarConfig;
+import br.com.marcosbassetto.model.keyboard.KeyboardConfig;
 import br.com.marcosbassetto.model.music.BackingTrack;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 
@@ -22,22 +23,28 @@ public class MidiGenerationService {
     private final ChordService chordService;
     private final GuitarConfig guitarConfig;
     private final BassConfig bassConfig;
+    private final KeyboardConfig keyboardConfig;
     private final boolean enableDrums;
     private final boolean enableGuitar;
     private final boolean enableBass;
+    private final boolean enableKeyboard;
 
     public MidiGenerationService(BackingTrack backingTrack, DrumConfig drumConfig,
                                  GuitarConfig guitarConfig, BassConfig bassConfig,
-                                 boolean enableDrums, boolean enableGuitar, boolean enableBass) {
+                                 KeyboardConfig keyboardConfig,
+                                 boolean enableDrums, boolean enableGuitar,
+                                 boolean enableBass, boolean enableKeyboard) {
         this.backingTrack = backingTrack;
         this.drumConfig = drumConfig;
         this.drumMidiService = new DrumMidiService();
         this.chordService = new ChordService();
         this.guitarConfig = guitarConfig != null ? guitarConfig : new GuitarConfig();
         this.bassConfig = bassConfig;
+        this.keyboardConfig = keyboardConfig;
         this.enableDrums = enableDrums;
         this.enableGuitar = enableGuitar;
         this.enableBass = enableBass;
+        this.enableKeyboard = enableKeyboard;
     }
 
     public void generate() {
@@ -100,6 +107,13 @@ public class MidiGenerationService {
             effectiveBassConfig.syncToTimeSignature(timeInfo);
             new BassMidiService(effectiveBassConfig, timeInfo)
                     .generateBassTrack(sequence, backingTrack, totalTicks, PPQ);
+        }
+        if (enableKeyboard) {
+            KeyboardConfig effectiveKeyboardConfig =
+                    keyboardConfig != null ? keyboardConfig : new KeyboardConfig(timeInfo);
+            effectiveKeyboardConfig.syncToTimeSignature(timeInfo);
+            new KeyboardMidiService(effectiveKeyboardConfig, timeInfo)
+                    .generateKeyboardTrack(sequence, backingTrack, totalTicks, PPQ);
         }
 
         return sequence;

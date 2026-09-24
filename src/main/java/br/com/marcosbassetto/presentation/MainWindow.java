@@ -3,6 +3,7 @@ package br.com.marcosbassetto.presentation;
 import br.com.marcosbassetto.model.bass.BassConfig;
 import br.com.marcosbassetto.model.drum.DrumConfig;
 import br.com.marcosbassetto.model.guitar.GuitarConfig;
+import br.com.marcosbassetto.model.keyboard.KeyboardConfig;
 import br.com.marcosbassetto.model.music.BackingTrack;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import br.com.marcosbassetto.service.MidiGenerationService;
@@ -24,6 +25,7 @@ public class MainWindow {
     private final DrumConfig drumConfig;
     private final GuitarConfig guitarConfig;
     private final BassConfig bassConfig;
+    private final KeyboardConfig keyboardConfig;
 
     private JCheckBox chkGuitar;
     private JCheckBox chkKeyboard;
@@ -33,7 +35,10 @@ public class MainWindow {
     public MainWindow() {
         drumConfig = new DrumConfig("4/4");
         guitarConfig = new GuitarConfig();
-        bassConfig = new BassConfig(TimeSignatureInfo.parse("4/4"));
+
+        TimeSignatureInfo initialInfo = TimeSignatureInfo.parse("4/4");
+        bassConfig = new BassConfig(initialInfo);
+        keyboardConfig = new KeyboardConfig(initialInfo);
 
         frmMainFrame = new JFrame("Gerador de BackingTrack");
         setupWindow();
@@ -100,9 +105,13 @@ public class MainWindow {
         JMenuItem mitGuitar = new JMenuItem("Guitar");
         mitGuitar.addActionListener(_ -> openGuitarConfig());
 
+        JMenuItem mitKeyboard = new JMenuItem("Keyboard");
+        mitKeyboard.addActionListener(_ -> openKeyboardConfig());
+
         mnuInstrument.add(mitDrum);
         mnuInstrument.add(mitBass);
         mnuInstrument.add(mitGuitar);
+        mnuInstrument.add(mitKeyboard);
         mnbMenuBar.add(mnuInstrument);
         frmMainFrame.add(mnbMenuBar);
     }
@@ -125,6 +134,17 @@ public class MainWindow {
 
         bassConfig.syncToTimeSignature(timeInfo);
         BassConfigWindow window = new BassConfigWindow(frmMainFrame, bassConfig, timeInfo);
+        window.setVisible(true);
+    }
+
+    private void openKeyboardConfig() {
+        TimeSignatureInfo timeInfo = currentTimeSignatureOrWarn("configurar o teclado");
+        if (timeInfo == null) {
+            return;
+        }
+
+        keyboardConfig.syncToTimeSignature(timeInfo);
+        KeyboardConfigWindow window = new KeyboardConfigWindow(frmMainFrame, keyboardConfig, timeInfo);
         window.setVisible(true);
     }
 
@@ -187,8 +207,9 @@ public class MainWindow {
                         txtDurationSeg.getText()
                 );
                 MidiGenerationService midiGenerationService = new MidiGenerationService(
-                        backingTrack, drumConfig, guitarConfig, bassConfig,
-                        chkDrums.isSelected(), chkGuitar.isSelected(), chkBass.isSelected());
+                        backingTrack, drumConfig, guitarConfig, bassConfig, keyboardConfig,
+                        chkDrums.isSelected(), chkGuitar.isSelected(),
+                        chkBass.isSelected(), chkKeyboard.isSelected());
                 midiGenerationService.generate();
             } else {
                 JOptionPane.showMessageDialog(frmMainFrame, "DADOS INVÁLIDOS ❌", "Erro", JOptionPane.ERROR_MESSAGE);

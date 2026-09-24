@@ -5,6 +5,8 @@ import br.com.marcosbassetto.model.bass.BassRhythmPattern;
 import br.com.marcosbassetto.model.drum.DrumConfig;
 import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.guitar.GuitarRhythmPattern;
+import br.com.marcosbassetto.model.keyboard.KeyboardConfig;
+import br.com.marcosbassetto.model.keyboard.KeyboardRhythmPattern;
 import br.com.marcosbassetto.model.music.BackingTrack;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import org.junit.jupiter.api.Test;
@@ -25,19 +27,29 @@ class MidiGenerationServiceTest {
     private static final int CHANNEL_HARMONY = 0;
     private static final int CHANNEL_BASS = 1;
     private static final int CHANNEL_GUITAR = 2;
+    private static final int CHANNEL_KEYBOARD = 3;
     private static final int CHANNEL_DRUMS = 9;
 
     private static BackingTrack backingTrack(String measure) {
         return new BackingTrack("C - Am - Dm - G", "120", measure, "0", "8");
     }
 
+    /** Gera com bateria desligada e baixo/teclado conforme as flags. */
+    private static Sequence generate(boolean drums, boolean guitar, boolean bass,
+                                     boolean keyboard, BackingTrack backingTrack,
+                                     GuitarConfig guitarConfig, BassConfig bassConfig,
+                                     KeyboardConfig keyboardConfig) throws Exception {
+        MidiGenerationService service = new MidiGenerationService(
+                backingTrack, new DrumConfig(backingTrack.getMeasure()),
+                guitarConfig, bassConfig, keyboardConfig,
+                drums, guitar, bass, keyboard);
+        return service.createSequence();
+    }
+
     private static Sequence generate(boolean drums, boolean guitar, boolean bass,
                                      BackingTrack backingTrack, GuitarConfig guitarConfig,
                                      BassConfig bassConfig) throws Exception {
-        MidiGenerationService service = new MidiGenerationService(
-                backingTrack, new DrumConfig(backingTrack.getMeasure()),
-                guitarConfig, bassConfig, drums, guitar, bass);
-        return service.createSequence();
+        return generate(drums, guitar, bass, false, backingTrack, guitarConfig, bassConfig, null);
     }
 
     private static Sequence generate(boolean drums, boolean guitar,
@@ -215,5 +227,98 @@ class MidiGenerationServiceTest {
 
         assertEquals(12, bassConfig.getPattern().getTotalSteps());
         assertTrue(noteOnCount(threeFour, CHANNEL_BASS) > 0);
+    }
+
+    @Test
+    void keyboardDisabledProducesNoKeyboardChannelEvents() throws Exception {
+        Sequence sequence = generate(false, false, false, false, backingTrack("4/4"),
+                new GuitarConfig(), null, new KeyboardConfig(TimeSignatureInfo.parse("4/4")));
+
+        assertFalse(channelsUsed(sequence).contains(CHANNEL_KEYBOARD));
+    }
+
+    @Test
+    void keyboardEnabledAddsTrackOnChannel3() throws Exception {
+        Sequence sequence = generate(false, false, false, true, backingTrack("4/4"),
+                new GuitarConfig(), null, new KeyboardConfig(TimeSignatureInfo.parse("4/4")));
+
+        assertTrue(channelsUsed(sequence).contains(CHANNEL_KEYBOARD));
+        assertTrue(noteOnCount(sequence, CHANNEL_KEYBOARD) > 0);
+    }
+
+    @Test
+    void allFiveInstrumentsUseDistinctChannels() throws Exception {
+        Sequence sequence = generate(true, true, true, true, backingTrack("4/4"),
+                new GuitarConfig(), new BassConfig(TimeSignatureInfo.parse("4/4")),
+                new KeyboardConfig(TimeSignatureInfo.parse("4/4")));
+        Set<Integer> channels = channelsUsed(sequence);
+
+        assertTrue(channels.contains(CHANNEL_HARMONY));
+        assertTrue(channels.contains(CHANNEL_BASS));
+        assertTrue(channels.contains(CHANNEL_GUITAR));
+        assertTrue(channels.contains(CHANNEL_KEYBOARD));
+        assertTrue(channels.contains(CHANNEL_DRUMS));
+    }
+
+    @Test
+    void enablingKeyboardAddsExactlyOneTrack() throws Exception {
+        KeyboardConfig keyboardConfig = new KeyboardConfig(TimeSignatureInfo.parse("4/4"));
+
+        Sequence without = generate(false, false, false, false, backingTrack("4/4"),
+                new GuitarConfig(), null, null);
+        Sequence with = generate(false, false, false, true, backingTrack("4/4"),
+                new GuitarConfig(), null, keyboardConfig);
+
+        assertEquals(without.getTracks().length + 1, with.getTracks().length);
+    }
+
+    @Test
+    void nullKeyboardConfigStillGeneratesWithoutCrash() throws Exception {
+        Sequence sequence = generate(false, true, true, true, backingTrack("4/4"),
+                new GuitarConfig(), new BassConfig(TimeSignatureInfo.parse("4/4")), null);
+
+        assertTrue(noteOnCount(sequence, CHANNEL_KEYBOARD) > 0);
+    }
+
+    /** Regressão: baixo, guitarra e teclado não podem se sobrepor em registro. */
+    @Test
+    void allInstrumentRegistersStaySeparatedInFullMix() throws Exception {
+        Sequence sequence = generate(true, true, true, true, backingTrack("4/4"),
+                new GuitarConfig(), new BassConfig(TimeSignatureInfo.parse("4/4")),
+                new KeyboardConfig(TimeSignatureInfo.parse("4/4")));
+
+        for (Track track : sequence.getTracks()) {
+            for (int i = 0; i < track.size(); i++) {
+                if (track.get(i).getMessage() instanceof ShortMessage sm
+                        && sm.getCommand() == ShortMessage.NOTE_ON
+                        && sm.getData2() > 0) {
+                    if (sm.getChannel() == CHANNEL_BASS) {
+                        assertTrue(sm.getData1() <= VoicingService.BASS_DERIVED_HIGH,
+                                "baixo em " + sm.getData1() + " invade a guitarra");
+                    }
+                    if (sm.getChannel() == CHANNEL_KEYBOARD) {
+                        assertTrue(sm.getData1() >= VoicingService.KEYBOARD_LOW,
+                                "teclado em " + sm.getData1() + " abaixo da regiao");
+                        assertTrue(sm.getData1() <= VoicingService.KEYBOARD_HIGH,
+                                "teclado em " + sm.getData1() + " acima da regiao");
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void keyboardServiceRespectsMeasureChangeBetweenGenerations() throws Exception {
+        KeyboardConfig keyboardConfig = new KeyboardConfig(TimeSignatureInfo.parse("4/4"));
+        keyboardConfig.applyPreset(KeyboardRhythmPattern.PRESET_ARPEJO_UP,
+                TimeSignatureInfo.parse("4/4"));
+
+        generate(false, false, false, true, backingTrack("4/4"),
+                new GuitarConfig(), null, keyboardConfig);
+        Sequence threeFour = generate(false, false, false, true, backingTrack("3/4"),
+                new GuitarConfig(), null, keyboardConfig);
+
+        assertEquals(12, keyboardConfig.getPattern().getTotalSteps());
+        assertTrue(noteOnCount(threeFour, CHANNEL_KEYBOARD) > 0);
     }
 }

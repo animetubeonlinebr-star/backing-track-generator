@@ -24,19 +24,28 @@ Layers under `src/main/java/br/com/marcosbassetto`:
 - `model.drum` — `DrumConfig`, `DrumPattern` (boolean grid), `DrumInstrument` (enum with default MIDI notes).
 - `model.guitar` — `GuitarConfig` (pattern + strum offset + velocities + program), `GuitarRhythmPattern` (per-step `AttackType` grid with presets).
 - `model.bass` — `BassConfig` (preset + velocity + note duration + program), `BassRhythmPattern` (per-step `BassNoteType` grid with presets).
+- `model.keyboard` — `KeyboardConfig` (preset + velocity + program + duration + sustain), `KeyboardRhythmPattern` (per-step `AttackType` grid with presets).
 
 ## Rhythm as a pattern (not per-note expression)
 For backing tracks each instrument is defined by WHEN and WHAT it plays, not HOW each note is expressed. There is deliberately no pitch bend / vibrato / slide / slap.
 - `GuitarRhythmPattern` is a per-step `AttackType` grid: `STRUM_DOWN`, `STRUM_UP`, `PICK`, `NONE`. Presets: `BATIDA_BASICA`, `BATIDA_BALADA`, `BATIDA_ROCK`, `DEDILHADO`, `REGGAE`.
 - `BassRhythmPattern` is a per-step `BassNoteType` grid: `ROOT`, `FIFTH`, `OCTAVE`, `NONE`. Presets: `FUNDAMENTAL_SIMPLES`, `FUNDAMENTAL_E_QUINTA`, `CAMINHANTE`, `REGGAE`. The guitar only decides "hit or not"; the bass also decides *which chord degree* — that is the key difference.
+- `KeyboardRhythmPattern` is a per-step `AttackType` grid: `NONE`, `BLOCK`, `ARP_UP`, `ARP_DOWN`. Presets: `PAD_SUSTENTADO`, `BLOCO_RITMICO`, `ARPEJO_UP`, `ARPEJO_DOWN`.
 - Patterns are independent of the chord, so swapping the progression keeps the groove.
 - Both rhythm patterns follow the same safety rules: constructor fills with NONE, `setX` bounds-checks, and presets are written relative to `beatsPerMeasure()`/`stepsPerBeat()` so any meter works.
+
+## Sustained vs. articulated notes
+The keyboard's identity is that it can hold a chord. Two rules make that work:
+- A BLOCK note is held until the **next attack** (or the measure end), scaled by `noteDurationPercent` — not for one step. Holding a pad for a single 16th step turns it into a blip, and the bug hides whenever the sustain pedal is on.
+- The sustain pedal (CC 64) is per measure: on at the downbeat, off near the measure end. The release is always emitted, including in a partial final measure, otherwise the pedal stays stuck on.
+- Arpeggio sub-notes must be bounded by `totalTicks` — the loop gate only checks the arpeggio's first note, so later notes can otherwise land past the end of the piece.
 
 ## Registers and voice leading
 `VoicingService` does NOT transpose each note until it "fits" — that destroys the voicing. It rebuilds the chord inside the instrument region, choosing the inversion with least movement from the previous voicing.
 - Preferred regions: bass `E1–G2` (single root), guitar `G2–E4` (closed voicing), keyboard `C4–C6` (spread/drop-2). Drums are channel 9.
-- `GuitarMidiService` carries `previousVoicing` measure to measure — that memory is what makes the voice leading work. The bass has no such state: it is monophonic and derives fifth/octave from the root, so there is nothing to conduct.
+- `GuitarMidiService` carries `previousVoicing` measure to measure — that memory is what makes the voice leading work. The bass has no such state: it is monophonic and derives fifth/octave from the root, so there is nothing to conduct. `KeyboardMidiService` also carries `previousVoicing`.
 - Register takes priority over voice leading: a voicing is never chosen outside its region.
+- Guitar (43–64) and keyboard (60–84) touch in the band 60–64, so they can share a boundary note (e.g. the D4 of G, Bb, Bm). Raising `KEYBOARD_LOW` to remove the overlap would break the keyboard's drop-2 spread, because the dropped middle note would fall below the floor — so the overlap is documented and covered by `guitarAndKeyboardOverlapOnlyInTheBoundaryBand` instead of removed.
 - Bass fifth/octave are derived via `VoicingService.bassFifth` / `bassOctave`, never with a naive `root + 7` / `root + 12`. A root at G2 (43) would otherwise put the octave at 55, inside the guitar region. Derived notes are capped at `BASS_DERIVED_HIGH` (50); when neither octave is valid (e.g. root 39), the root itself is repeated rather than leaving the region.
 - Because `ChordService` returns pitch classes, the voicing layer is instrument-agnostic.
 
@@ -44,6 +53,7 @@ For backing tracks each instrument is defined by WHEN and WHAT it plays, not HOW
 - 0 — harmony (chords)
 - 1 — bass
 - 2 — guitar
+- 3 — keyboard
 - 9 — drums (GM percussion)
 
 ## Conventions & gotchas
@@ -54,5 +64,5 @@ For backing tracks each instrument is defined by WHEN and WHAT it plays, not HOW
 - Preset-based grids ignore out-of-range steps and constructors fill with NONE, never `null`.
 - The bass's `FIFTH` is always a perfect fifth (+7), so diminished/augmented chords get a non-chord tone. This is an accepted trade-off from the design, not an oversight — revisit if altered chords become common.
 - UI strings and comments are in Portuguese; class/method names in English.
-- Remaining stubs/placeholders: `DrumMidiConfigWindow` if empty, `KeyboardMidiService`, `model.music.Chord`, `presentation.ChordsSymbols`. The Keyboard checkbox in `MainWindow` is still not wired to any generator — implementing it should reuse `VoicingService.forKeyboard`.
+- Remaining stubs/placeholders: `DrumMidiConfigWindow` if empty, `model.music.Chord`, `presentation.ChordsSymbols`. All four instrument checkboxes in `MainWindow` are now wired. There is no keyboard option to reuse `VoicingService.forKeyboard` for anything else; the harmony track (channel 0) is a simple block-chord track and is a candidate to be replaced by the keyboard track.
 - `gradlew` executable bit and Gradle config-cache are sensitive to the environment; prefer `--no-daemon` in CI/sandbox.

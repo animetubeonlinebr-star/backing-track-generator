@@ -23,6 +23,9 @@ public final class VoicingService {
     public static final int GUITAR_LOW = 43;    // G2
     public static final int GUITAR_HIGH = 64;   // E4
 
+    // Atenção: guitarra (43–64) e teclado (60–84) se tocam em 60–64. É uma
+    // consequência das regiões acima; manter o teclado no piso C4 preserva o
+    // espalhamento (drop 2) — subir o piso faria a nota do meio cair fora.
     public static final int KEYBOARD_LOW = 60;  // C4
     public static final int KEYBOARD_HIGH = 84; // C6
 
