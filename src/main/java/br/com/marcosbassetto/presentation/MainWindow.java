@@ -5,6 +5,7 @@ import br.com.marcosbassetto.model.drum.DrumConfig;
 import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.keyboard.KeyboardConfig;
 import br.com.marcosbassetto.model.music.BackingTrack;
+import br.com.marcosbassetto.model.music.StylePreset;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import br.com.marcosbassetto.service.MidiGenerationService;
 import br.com.marcosbassetto.utils.TextFieldUtils;
@@ -113,7 +114,40 @@ public class MainWindow {
         mnuInstrument.add(mitGuitar);
         mnuInstrument.add(mitKeyboard);
         mnbMenuBar.add(mnuInstrument);
+
+        JMenu mnuPresets = new JMenu("PRESETS");
+        for (StylePreset style : StylePreset.values()) {
+            JMenuItem mitStyle = new JMenuItem(style.getLabel());
+            mitStyle.addActionListener(_ -> applyStyle(style));
+            mnuPresets.add(mitStyle);
+        }
+        mnbMenuBar.add(mnuPresets);
+
         frmMainFrame.add(mnbMenuBar);
+    }
+
+    /**
+     * Aplica o preset de estilo: gera o compasso no formulário principal e, em
+     * seguida, a configuração individual de cada instrumento — incluindo a
+     * região de alturas, para que guitarra e teclado não disputem o espaço do
+     * baixo na mixagem.
+     */
+    private void applyStyle(StylePreset style) {
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse(style.getMeasure());
+        txtMeasure.setText(style.getMeasure());
+
+        drumConfig.setTimeSignatureInfo(timeInfo, false);
+        drumConfig.applyStyle(style, timeInfo);
+
+        guitarConfig.applyStyle(style, timeInfo);
+        bassConfig.applyStyle(style, timeInfo);
+        keyboardConfig.applyStyle(style, timeInfo);
+
+        JOptionPane.showMessageDialog(frmMainFrame,
+                "Preset \"" + style.getLabel() + "\" aplicado.\n"
+                        + "Compasso: " + style.getMeasure() + "\n"
+                        + "Drum, Bass, Guitar e Keyboard configurados para o estilo.",
+                "Preset aplicado", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void openGuitarConfig() {

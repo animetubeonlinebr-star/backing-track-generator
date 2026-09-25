@@ -8,14 +8,20 @@ import br.com.marcosbassetto.model.guitar.GuitarRhythmPattern;
 import br.com.marcosbassetto.model.keyboard.KeyboardConfig;
 import br.com.marcosbassetto.model.keyboard.KeyboardRhythmPattern;
 import br.com.marcosbassetto.model.music.BackingTrack;
+import br.com.marcosbassetto.model.music.Instrument;
+import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import javax.sound.midi.MidiEvent;
 import javax.sound.midi.Sequence;
 import javax.sound.midi.ShortMessage;
 import javax.sound.midi.Track;
+import java.io.File;
+import java.nio.file.Path;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -320,5 +326,106 @@ class MidiGenerationServiceTest {
 
         assertEquals(12, keyboardConfig.getPattern().getTotalSteps());
         assertTrue(noteOnCount(threeFour, CHANNEL_KEYBOARD) > 0);
+    }
+
+    @Test
+    void eachEnabledInstrumentGetsItsOwnSequenceWithTheRightName() throws Exception {
+        MidiGenerationService service = new MidiGenerationService(
+                backingTrack("4/4"), new DrumConfig("4/4"),
+                new GuitarConfig(), new BassConfig(TimeSignatureInfo.parse("4/4")),
+                new KeyboardConfig(TimeSignatureInfo.parse("4/4")),
+                true, true, true, true);
+
+        Map<Instrument, Sequence> sequences = service.createInstrumentSequences();
+
+        assertEquals(Set.of(Instrument.GUITAR, Instrument.BASS,
+                Instrument.KEYBOARD, Instrument.DRUMS), sequences.keySet());
+        assertEquals("Guitar.midi", Instrument.GUITAR.getFileName());
+        assertEquals("Bass.midi", Instrument.BASS.getFileName());
+        assertEquals("keyboard.midi", Instrument.KEYBOARD.getFileName());
+        assertEquals("drums.midi", Instrument.DRUMS.getFileName());
+    }
+
+    @Test
+    void instrumentSequenceContainsOnlyThatInstrumentChannel() throws Exception {
+        MidiGenerationService service = new MidiGenerationService(
+                backingTrack("4/4"), new DrumConfig("4/4"),
+                new GuitarConfig(), new BassConfig(TimeSignatureInfo.parse("4/4")),
+                new KeyboardConfig(TimeSignatureInfo.parse("4/4")),
+                true, true, true, true);
+
+        Map<Instrument, Sequence> sequences = service.createInstrumentSequences();
+
+        assertEquals(Set.of(CHANNEL_GUITAR), channelsUsed(sequences.get(Instrument.GUITAR)));
+        assertEquals(Set.of(CHANNEL_BASS), channelsUsed(sequences.get(Instrument.BASS)));
+        assertEquals(Set.of(CHANNEL_KEYBOARD), channelsUsed(sequences.get(Instrument.KEYBOARD)));
+        assertEquals(Set.of(CHANNEL_DRUMS), channelsUsed(sequences.get(Instrument.DRUMS)));
+    }
+
+    @Test
+    void disabledInstrumentsAreNotExported() throws Exception {
+        MidiGenerationService service = new MidiGenerationService(
+                backingTrack("4/4"), new DrumConfig("4/4"),
+                new GuitarConfig(), new BassConfig(TimeSignatureInfo.parse("4/4")),
+                new KeyboardConfig(TimeSignatureInfo.parse("4/4")),
+                false, true, false, false);
+
+        Map<Instrument, Sequence> sequences = service.createInstrumentSequences();
+
+        assertEquals(Set.of(Instrument.GUITAR), sequences.keySet());
+    }
+
+    @Test
+    void writeInstrumentFilesCreatesOneFilePerEnabledInstrument(@TempDir Path tempDir)
+            throws Exception {
+        MidiGenerationService service = new MidiGenerationService(
+                backingTrack("4/4"), new DrumConfig("4/4"),
+                new GuitarConfig(), new BassConfig(TimeSignatureInfo.parse("4/4")),
+                new KeyboardConfig(TimeSignatureInfo.parse("4/4")),
+                true, true, true, true);
+
+        File fullMix = tempDir.resolve("backing_track.mid").toFile();
+        service.writeInstrumentFiles(fullMix);
+
+        assertTrue(new File(tempDir.toFile(), "Guitar.midi").isFile());
+        assertTrue(new File(tempDir.toFile(), "Bass.midi").isFile());
+        assertTrue(new File(tempDir.toFile(), "keyboard.midi").isFile());
+        assertTrue(new File(tempDir.toFile(), "drums.midi").isFile());
+    }
+
+    @Test
+    void intensityChangesTheGeneratedVelocity() throws Exception {
+        GuitarConfig soft = new GuitarConfig();
+        soft.setPreset(GuitarRhythmPattern.PRESET_BATIDA_ROCK);
+        soft.setIntensity(Intensity.BAIXA);
+        GuitarConfig loud = new GuitarConfig();
+        loud.setPreset(GuitarRhythmPattern.PRESET_BATIDA_ROCK);
+        loud.setIntensity(Intensity.FORTE);
+
+        Sequence softSequence = generate(false, true, backingTrack("4/4"), soft);
+        Sequence loudSequence = generate(false, true, backingTrack("4/4"), loud);
+
+        double softMean = meanVelocityOnChannel(softSequence, CHANNEL_GUITAR);
+        double loudMean = meanVelocityOnChannel(loudSequence, CHANNEL_GUITAR);
+
+        assertTrue(loudMean > softMean,
+                "intensidade forte deveria gerar velocity maior: " + softMean + " vs " + loudMean);
+    }
+
+    private static double meanVelocityOnChannel(Sequence sequence, int channel) {
+        long sum = 0;
+        long count = 0;
+        for (Track track : sequence.getTracks()) {
+            for (int i = 0; i < track.size(); i++) {
+                if (track.get(i).getMessage() instanceof ShortMessage sm
+                        && sm.getCommand() == ShortMessage.NOTE_ON
+                        && sm.getData2() > 0
+                        && sm.getChannel() == channel) {
+                    sum += sm.getData2();
+                    count++;
+                }
+            }
+        }
+        return count == 0 ? 0 : (double) sum / count;
     }
 }

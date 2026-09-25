@@ -3,6 +3,7 @@ package br.com.marcosbassetto.service;
 import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.guitar.GuitarRhythmPattern;
 import br.com.marcosbassetto.model.music.BackingTrack;
+import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import org.junit.jupiter.api.Test;
 
@@ -12,6 +13,7 @@ import javax.sound.midi.ShortMessage;
 import javax.sound.midi.Track;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -48,6 +50,10 @@ class GuitarMidiServiceTest {
         return count;
     }
 
+    private static double meanVelocity(List<NoteOn> ons) {
+        return ons.stream().mapToInt(NoteOn::velocity).average().orElse(0);
+    }
+
     private static BackingTrack track(String progression, String measure) {
         return new BackingTrack(progression, "120", measure, "0", "8");
     }
@@ -61,9 +67,22 @@ class GuitarMidiServiceTest {
     }
 
     private static Track generate(BackingTrack backingTrack, String preset, long totalTicks) throws Exception {
+        return generate(backingTrack, preset, null, totalTicks);
+    }
+
+    /**
+     * Variante determinística: sem desvio aleatório, sobra apenas o acento de
+     * fraseado — é o que permite afirmar qual nota do acorde é a mais forte.
+     */
+    private static Track generate(BackingTrack backingTrack, String preset,
+                                  Intensity intensity, long totalTicks) throws Exception {
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse(backingTrack.getMeasure());
+        GuitarConfig config = configFor(backingTrack, preset);
+        if (intensity != null) {
+            config.setIntensity(intensity);
+        }
         Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
-        new GuitarMidiService(configFor(backingTrack, preset), timeInfo)
+        new GuitarMidiService(config, timeInfo, new VelocityHumanizer(new Random(1), 0))
                 .generateGuitarTrack(sequence, backingTrack, totalTicks, PPQ);
         return sequence.getTracks()[0];
     }
@@ -100,6 +119,7 @@ class GuitarMidiServiceTest {
         // padrao minimo: apenas um STRUM_DOWN no passo 0
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
         GuitarConfig config = new GuitarConfig();
+        config.setIntensity(Intensity.FORTE); // media 80
         config.getPattern().setAttack(0, GuitarRhythmPattern.AttackType.STRUM_DOWN);
 
         Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
@@ -113,29 +133,57 @@ class GuitarMidiServiceTest {
         assertEquals(30, ons.get(2).tick());
         assertTrue(ons.get(0).note() < ons.get(1).note(), "down comeca pelo grave");
         assertTrue(ons.get(1).note() < ons.get(2).note());
-        ons.forEach(n -> assertEquals(80, n.velocity(), "down e mais forte"));
+        // Varias execucoes: a humanizacao varia o valor, mas nao a media.
+        long sum = 0;
+        for (int run = 0; run < 40; run++) {
+            Sequence repeated = new Sequence(Sequence.PPQ, PPQ);
+            new GuitarMidiService(config, timeInfo)
+                    .generateGuitarTrack(repeated, track("C", "4/4"), 1920, PPQ);
+            sum += meanVelocity(noteOns(repeated.getTracks()[0]));
+        }
+        double mean = (double) sum / 40;
+        assertTrue(Math.abs(mean - 80) <= 6,
+                "media humanizada perto de 80, foi " + mean);
     }
 
     @Test
-    void strumUpDescendsInPitchAndIsSofterThanDown() throws Exception {
+    void strumDownUsesHumanizedVelocitiesAroundTheIntensityMean() throws Exception {
+        List<NoteOn> ons = noteOns(generate(track("C", "4/4"),
+                GuitarRhythmPattern.PRESET_BATIDA_ROCK, Intensity.FORTE, 1920));
+
+        assertTrue(ons.size() > 4);
+        assertTrue(ons.stream().mapToInt(NoteOn::velocity).distinct().count() > 1,
+                "velocity nao pode ser constante (deve ser humanizada)");
+        assertTrue(Math.abs(meanVelocity(ons) - 80) <= 8,
+                "media perto de 80 na intensidade forte, foi " + meanVelocity(ons));
+    }
+
+    @Test
+    void strumUpKeepsChordToneAccentOnTheLowestNote() throws Exception {
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
         GuitarConfig config = new GuitarConfig();
+        config.setIntensity(Intensity.FORTE);
+        config.setStrumOffsetTicks(0);
         config.getPattern().setAttack(0, GuitarRhythmPattern.AttackType.STRUM_UP);
 
         Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
-        new GuitarMidiService(config, timeInfo)
+        new GuitarMidiService(config, timeInfo, new VelocityHumanizer(new Random(1), 0))
                 .generateGuitarTrack(sequence, track("C", "4/4"), 1920, PPQ);
         List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
 
         assertEquals(3, ons.size());
         assertTrue(ons.get(0).note() > ons.get(1).note(), "up comeca pelo agudo");
-        ons.forEach(n -> assertEquals(65, n.velocity(), "up e mais suave"));
+        // A nota mais grave (ultima no up) recebe o maior acento de fundamental.
+        int lowestVelocity = ons.get(2).velocity();
+        assertTrue(lowestVelocity > ons.get(0).velocity(),
+                "nota grave do up deve ser a mais forte");
     }
 
     @Test
     void pickPlaysNotesSequentiallyWithinTheStep() throws Exception {
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
         GuitarConfig config = new GuitarConfig();
+        config.setIntensity(Intensity.FORTE); // media 75
         config.getPattern().setAttack(0, GuitarRhythmPattern.AttackType.PICK);
 
         Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
@@ -149,7 +197,7 @@ class GuitarMidiServiceTest {
         assertEquals(0, ons.get(0).tick());
         assertEquals(subStep, ons.get(1).tick());
         assertEquals(subStep * 2, ons.get(2).tick());
-        ons.forEach(n -> assertEquals(75, n.velocity()));
+        assertTrue(Math.abs(meanVelocity(ons) - 75) <= 8);
     }
 
     @Test

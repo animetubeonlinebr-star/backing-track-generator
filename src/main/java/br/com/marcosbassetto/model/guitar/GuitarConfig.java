@@ -1,23 +1,58 @@
 package br.com.marcosbassetto.model.guitar;
 
+import br.com.marcosbassetto.model.music.Intensity;
+import br.com.marcosbassetto.model.music.Register;
+import br.com.marcosbassetto.model.music.StylePreset;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 
 /**
  * Ajustes da guitarra rítmica: qual padrão de ataques usar e os parâmetros de
- * execução (offset da palhetada, velocities, timbre). É a fonte única dos
- * valores editáveis pela UI, para que o serviço de MIDI não os tenha fixos.
+ * execução (offset da palhetada, intensidade, timbre, registro). É a fonte única
+ * dos valores editáveis pela UI, para que o serviço de MIDI não os tenha fixos.
+ *
+ * <p>A intensidade (baixa/média/forte) define a velocity média; o valor final
+ * de cada nota recebe humanização no {@code GuitarMidiService}.
  */
 public class GuitarConfig {
+
+    private static final int BASE_VELOCITY_DOWN = 80;
+    private static final int BASE_VELOCITY_UP = 65;
+    private static final int BASE_VELOCITY_PICK = 75;
 
     private GuitarRhythmPattern pattern = new GuitarRhythmPattern(16);
     private String preset = GuitarRhythmPattern.PRESET_BATIDA_BASICA;
     private String appliedPreset = null;
     private int appliedSteps = -1;
     private int strumOffsetTicks = 15;
-    private int velocityDown = 80;
-    private int velocityUp = 65;
-    private int velocityPick = 75;
+    private Intensity intensity = Intensity.MEDIA;
+    private Register register = Register.GUITAR;
     private int programChange = 25; // Acoustic Guitar (nylon)
+
+    /**
+     * Aplica a configuração padrão de um estilo: padrão rítmico, intensidade,
+     * timbre e região de alturas — esta última escolhida para não disputar
+     * espaço com o baixo.
+     */
+    public void applyStyle(StylePreset style, TimeSignatureInfo timeInfo) {
+        if (style == null) {
+            return;
+        }
+        this.preset = style.getGuitarPattern();
+        this.intensity = style.getIntensity();
+        this.register = style.getGuitarRegister();
+        this.programChange = style.getGuitarProgram();
+        reapplyPreset(timeInfo);
+    }
+
+    public Register getRegister() {
+        return register;
+    }
+
+    public void setRegister(Register register) {
+        if (register != null) {
+            this.register = register;
+        }
+    }
 
     public GuitarRhythmPattern getPattern() {
         return pattern;
@@ -74,28 +109,29 @@ public class GuitarConfig {
         this.strumOffsetTicks = Math.max(0, strumOffsetTicks);
     }
 
+    public Intensity getIntensity() {
+        return intensity;
+    }
+
+    public void setIntensity(Intensity intensity) {
+        if (intensity != null) {
+            this.intensity = intensity;
+        }
+    }
+
+    /** Velocity média da batida para baixo, já ajustada pela intensidade. */
     public int getVelocityDown() {
-        return velocityDown;
+        return intensity.scale(BASE_VELOCITY_DOWN);
     }
 
-    public void setVelocityDown(int velocityDown) {
-        this.velocityDown = clampVelocity(velocityDown);
-    }
-
+    /** Velocity média da batida para cima, já ajustada pela intensidade. */
     public int getVelocityUp() {
-        return velocityUp;
+        return intensity.scale(BASE_VELOCITY_UP);
     }
 
-    public void setVelocityUp(int velocityUp) {
-        this.velocityUp = clampVelocity(velocityUp);
-    }
-
+    /** Velocity média do dedilhado, já ajustada pela intensidade. */
     public int getVelocityPick() {
-        return velocityPick;
-    }
-
-    public void setVelocityPick(int velocityPick) {
-        this.velocityPick = clampVelocity(velocityPick);
+        return intensity.scale(BASE_VELOCITY_PICK);
     }
 
     public int getProgramChange() {
@@ -104,9 +140,5 @@ public class GuitarConfig {
 
     public void setProgramChange(int programChange) {
         this.programChange = Math.max(0, Math.min(127, programChange));
-    }
-
-    private static int clampVelocity(int velocity) {
-        return Math.max(0, Math.min(127, velocity));
     }
 }

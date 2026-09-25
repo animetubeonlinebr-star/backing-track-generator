@@ -1,5 +1,6 @@
 package br.com.marcosbassetto.model.keyboard;
 
+import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +15,8 @@ class KeyboardConfigTest {
     @Test
     void defaultsAreSensible() {
         KeyboardConfig config = new KeyboardConfig(FOUR_FOUR);
-        assertEquals(70, config.getVelocity(), "teclado mais suave que guitarra/baixo");
+        assertEquals(Intensity.MEDIA, config.getIntensity());
+        assertEquals(60, config.getVelocity(), "70 * 85%: teclado mais suave que guitarra/baixo");
         assertEquals(95, config.getNoteDurationPercent());
         assertEquals(0, config.getProgramChange(), "Acoustic Grand Piano");
         assertTrue(config.isSustainEnabled());
@@ -29,12 +31,14 @@ class KeyboardConfigTest {
     }
 
     @Test
-    void velocityIsClampedToRange() {
+    void intensityDrivesMeanVelocity() {
         KeyboardConfig config = new KeyboardConfig(FOUR_FOUR);
-        config.setVelocity(200);
-        assertEquals(KeyboardConfig.MAX_VELOCITY, config.getVelocity());
-        config.setVelocity(20);
-        assertEquals(KeyboardConfig.MIN_VELOCITY, config.getVelocity());
+
+        config.setIntensity(Intensity.BAIXA);
+        assertEquals(49, config.getVelocity(), "70 * 70%");
+
+        config.setIntensity(Intensity.FORTE);
+        assertEquals(70, config.getVelocity(), "70 * 100%");
     }
 
     @Test

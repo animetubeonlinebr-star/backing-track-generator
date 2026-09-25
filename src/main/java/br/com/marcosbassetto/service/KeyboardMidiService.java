@@ -34,10 +34,17 @@ public class KeyboardMidiService {
     private final ChordService chordService = new ChordService();
     private final KeyboardConfig config;
     private final TimeSignatureInfo timeInfo;
+    private final VelocityHumanizer humanizer;
 
     public KeyboardMidiService(KeyboardConfig config, TimeSignatureInfo timeInfo) {
+        this(config, timeInfo, new VelocityHumanizer());
+    }
+
+    public KeyboardMidiService(KeyboardConfig config, TimeSignatureInfo timeInfo,
+                               VelocityHumanizer humanizer) {
         this.config = config != null ? config : new KeyboardConfig(timeInfo);
         this.timeInfo = timeInfo;
+        this.humanizer = humanizer != null ? humanizer : new VelocityHumanizer();
     }
 
     /**
@@ -51,13 +58,23 @@ public class KeyboardMidiService {
      */
     public void generateKeyboardTrack(Sequence sequence, BackingTrack backingTrack,
                                       long totalTicks, int ppq) throws InvalidMidiDataException {
+        generateKeyboardTrack(sequence, backingTrack, totalTicks, ppq, sequence.createTrack());
+    }
 
-        Track track = sequence.createTrack();
+    /**
+     * Gera a track de teclado dentro de uma track já existente. Usado tanto pelo
+     * arquivo único (track própria) quanto pelo MIDI individual do instrumento.
+     */
+    public void generateKeyboardTrack(Sequence sequence, BackingTrack backingTrack,
+                                      long totalTicks, int ppq, Track track)
+            throws InvalidMidiDataException {
+
         setProgramChange(track, CHANNEL_KEYBOARD, config.getProgramChange(), 0);
 
         String[] chords = backingTrack.getProgression().split("\\s*-\\s*");
         long measureTicks = timeInfo.getMeasureTicks(ppq);
         long stepTicks = timeInfo.getStepTicks(ppq);
+        int stepsPerBeat = timeInfo.stepsPerBeat();
 
         KeyboardRhythmPattern pattern = config.getPattern();
 
@@ -68,7 +85,7 @@ public class KeyboardMidiService {
         while (currentMeasureTick < totalTicks) {
             String chordSymbol = chords[chordIndex % chords.length];
             List<Integer> rawNotes = chordService.getMidiNotes(chordSymbol);
-            List<Integer> voicing = VoicingService.forKeyboard(rawNotes, previousVoicing);
+            List<Integer> voicing = VoicingService.forKeyboard(rawNotes, previousVoicing, config.getRegister());
             previousVoicing = voicing;
 
             addSustainEvents(track, currentMeasureTick, measureTicks, totalTicks);
@@ -89,10 +106,13 @@ public class KeyboardMidiService {
                 long holdUntil = Math.min(attackTick + holdTicks, totalTicks - 1);
 
                 AttackType attack = pattern.getAttack(step);
+                int stepAccent = humanizer.accentForStep(step, stepsPerBeat);
                 switch (attack) {
-                    case BLOCK -> playBlock(track, voicing, attackTick, holdUntil);
-                    case ARP_UP -> playArpeggio(track, voicing, attackTick, stepTicks, true, totalTicks);
-                    case ARP_DOWN -> playArpeggio(track, voicing, attackTick, stepTicks, false, totalTicks);
+                    case BLOCK -> playBlock(track, voicing, attackTick, holdUntil, stepAccent);
+                    case ARP_UP -> playArpeggio(track, voicing, attackTick, stepTicks, true,
+                            totalTicks, stepAccent);
+                    case ARP_DOWN -> playArpeggio(track, voicing, attackTick, stepTicks, false,
+                            totalTicks, stepAccent);
                     case NONE -> { }
                 }
             }
@@ -133,9 +153,13 @@ public class KeyboardMidiService {
     }
 
     /** Todas as notas no mesmo tick. */
-    private void playBlock(Track track, List<Integer> notes, long tick, long holdUntil) {
-        for (int note : notes) {
-            addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_KEYBOARD, note, config.getVelocity(), tick);
+    private void playBlock(Track track, List<Integer> notes, long tick, long holdUntil,
+                           int stepAccent) {
+        for (int i = 0; i < notes.size(); i++) {
+            int note = notes.get(i);
+            int velocity = humanizer.humanize(config.getVelocity(),
+                    stepAccent + humanizer.accentForChordTone(i, notes.size()));
+            addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_KEYBOARD, note, velocity, tick);
             addNoteEvent(track, ShortMessage.NOTE_OFF, CHANNEL_KEYBOARD, note, 0,
                     Math.max(tick + MIN_NOTE_TICKS, holdUntil));
         }
@@ -147,7 +171,7 @@ public class KeyboardMidiService {
      * valida a primeira nota do arpejo.
      */
     private void playArpeggio(Track track, List<Integer> notes, long startTick,
-                              long stepTicks, boolean up, long totalTicks) {
+                              long stepTicks, boolean up, long totalTicks, int stepAccent) {
         if (notes.isEmpty()) {
             return;
         }
@@ -165,8 +189,11 @@ public class KeyboardMidiService {
             long noteOff = Math.min(
                     Math.max(tick + MIN_NOTE_TICKS, tick + subStep - SUSTAIN_GAP_TICKS),
                     totalTicks - 1);
+            int pitchIndex = up ? i : ordered.size() - 1 - i;
+            int velocity = humanizer.humanize(config.getVelocity(),
+                    stepAccent + humanizer.accentForChordTone(pitchIndex, ordered.size()));
             addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_KEYBOARD,
-                    ordered.get(i), config.getVelocity(), tick);
+                    ordered.get(i), velocity, tick);
             addNoteEvent(track, ShortMessage.NOTE_OFF, CHANNEL_KEYBOARD,
                     ordered.get(i), 0, noteOff);
         }

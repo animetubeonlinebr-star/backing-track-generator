@@ -13,12 +13,23 @@ public class DrumMidiService {
 
     private static final int CHANNEL_DRUMS = 9; // Canal 10 no MIDI (index 0-based)
 
+    private final VelocityHumanizer humanizer;
+
+    public DrumMidiService() {
+        this(new VelocityHumanizer());
+    }
+
+    public DrumMidiService(VelocityHumanizer humanizer) {
+        this.humanizer = humanizer != null ? humanizer : new VelocityHumanizer();
+    }
+
     public void generateDrumTrack(Track drumTrack, DrumConfig drumConfig, int ppq, long totalTicks) throws InvalidMidiDataException {
         TimeSignatureInfo timeInfo = drumConfig.getTimeSignatureInfo();
 
         long stepTicks = timeInfo.getStepTicks(ppq);
         long ticksPerMeasure = timeInfo.getMeasureTicks(ppq);
         int totalStepsInMeasure = timeInfo.totalSteps();
+        int stepsPerBeat = timeInfo.stepsPerBeat();
 
         long currentMeasureTick = 0;
         while (currentMeasureTick < totalTicks) {
@@ -29,7 +40,9 @@ public class DrumMidiService {
                 for (DrumInstrument inst : DrumInstrument.values()) {
                     if (drumConfig.isHit(inst, step)) {
                         int note = drumConfig.getMidiNote(inst);
-                        int velocity = 100;
+                        int accent = humanizer.accentForStep(step, stepsPerBeat)
+                                + humanizer.accentForChordTone(characterIndex(inst), 4);
+                        int velocity = humanizer.humanize(drumConfig.getVelocity(), accent);
 
                         ShortMessage noteOn = new ShortMessage();
                         noteOn.setMessage(ShortMessage.NOTE_ON, CHANNEL_DRUMS, note, velocity);
@@ -43,5 +56,18 @@ public class DrumMidiService {
             }
             currentMeasureTick += ticksPerMeasure;
         }
+    }
+
+    /**
+     * Caráter dinâmico de cada peça: bumbo e caixa sustentam a levada e soam mais
+     * fortes, pratos de condução ficam de fundo. Escala de 0 (mais suave) a 3.
+     */
+    private static int characterIndex(DrumInstrument instrument) {
+        return switch (instrument) {
+            case KICK, SNARE -> 0;
+            case TOM_HIGH, TOM_MID, TOM_LOW -> 1;
+            case CRASH, RIDE -> 2;
+            case HI_HAT_CLOSED, HI_HAT_OPEN -> 3;
+        };
     }
 }

@@ -3,6 +3,7 @@ package br.com.marcosbassetto.service;
 import br.com.marcosbassetto.model.bass.BassConfig;
 import br.com.marcosbassetto.model.bass.BassRhythmPattern;
 import br.com.marcosbassetto.model.music.BackingTrack;
+import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import org.junit.jupiter.api.Test;
 
@@ -12,6 +13,7 @@ import javax.sound.midi.ShortMessage;
 import javax.sound.midi.Track;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -54,9 +56,15 @@ class BassMidiServiceTest {
 
     private static Track generate(BackingTrack backingTrack, String preset, long totalTicks)
             throws Exception {
+        return generate(backingTrack, preset, Intensity.MEDIA, totalTicks);
+    }
+
+    private static Track generate(BackingTrack backingTrack, String preset,
+                                  Intensity intensity, long totalTicks) throws Exception {
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse(backingTrack.getMeasure());
         BassConfig config = new BassConfig(timeInfo);
         config.applyPreset(preset, timeInfo);
+        config.setIntensity(intensity);
 
         Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
         new BassMidiService(config, timeInfo)
@@ -151,22 +159,29 @@ class BassMidiServiceTest {
     }
 
     @Test
-    void velocityAndDurationComeFromConfig() throws Exception {
+    void velocityIsHumanizedAroundTheIntensityMean() throws Exception {
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
         BassConfig config = new BassConfig(timeInfo);
-        config.setVelocity(100);
+        config.applyPreset(BassRhythmPattern.PRESET_CAMINHANTE, timeInfo);
+        config.setIntensity(Intensity.FORTE); // media 90
         config.setNoteDurationPercent(50);
 
         Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
         new BassMidiService(config, timeInfo)
-                .generateBassTrack(sequence, track("C", "4/4"), 1920, PPQ);
+                .generateBassTrack(sequence, track("C - Am - Dm - G", "4/4"), 7680, PPQ);
         Track t = sequence.getTracks()[0];
+
+        List<NoteOn> ons = noteOns(t);
+        assertTrue(ons.size() > 4, "precisa de varias notas para avaliar humanizacao");
+        assertTrue(ons.stream().mapToInt(NoteOn::velocity).distinct().count() > 1,
+                "velocity nao pode ser constante (deve ser humanizada)");
+        assertTrue(ons.stream().allMatch(n -> n.velocity() >= 1 && n.velocity() <= 127));
+
+        double mean = ons.stream().mapToInt(NoteOn::velocity).average().orElseThrow();
+        assertTrue(Math.abs(mean - 90) <= 8, "media humanizada perto de 90, foi " + mean);
 
         long stepTicks = timeInfo.getStepTicks(PPQ);
         long expectedDuration = (stepTicks * 50) / 100;
-
-        NoteOn first = noteOns(t).get(0);
-        assertEquals(100, first.velocity());
         long noteOffTick = -1;
         for (int i = 0; i < t.size(); i++) {
             if (t.get(i).getMessage() instanceof ShortMessage sm
@@ -175,7 +190,7 @@ class BassMidiServiceTest {
                 break;
             }
         }
-        assertEquals(first.tick() + expectedDuration, noteOffTick);
+        assertEquals(ons.get(0).tick() + expectedDuration, noteOffTick);
     }
 
     @Test

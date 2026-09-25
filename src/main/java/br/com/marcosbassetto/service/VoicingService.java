@@ -1,5 +1,7 @@
 package br.com.marcosbassetto.service;
 
+import br.com.marcosbassetto.model.music.Register;
+
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -13,28 +15,33 @@ import java.util.Set;
  * voicing. Em vez disso reconstrói o acorde dentro da região do instrumento e,
  * quando existe um voicing anterior, escolhe a inversão que se move menos
  * (voice leading).
+ *
+ * <p>As regiões são parâmetros ({@link Register}), não constantes: cada preset
+ * de estilo reposiciona guitarra e teclado para fora do baixo.
  */
 public final class VoicingService {
 
-    // Regiões preferidas (não limites rígidos)
-    public static final int BASS_LOW = 28;      // E1
-    public static final int BASS_HIGH = 43;     // G2
+    // Regiões de referência (as mesmas do Register; mantidas para os testes e
+    // para quem não precisa de um registro específico de estilo).
+    public static final int BASS_LOW = Register.BASS.low();          // E1
+    public static final int BASS_HIGH = Register.BASS.high();        // G2
 
-    public static final int GUITAR_LOW = 43;    // G2
-    public static final int GUITAR_HIGH = 64;   // E4
+    public static final int GUITAR_LOW = Register.GUITAR.low();      // G2
+    public static final int GUITAR_HIGH = Register.GUITAR.high();    // E4
 
-    // Atenção: guitarra (43–64) e teclado (60–84) se tocam em 60–64. É uma
-    // consequência das regiões acima; manter o teclado no piso C4 preserva o
-    // espalhamento (drop 2) — subir o piso faria a nota do meio cair fora.
-    public static final int KEYBOARD_LOW = 60;  // C4
-    public static final int KEYBOARD_HIGH = 84; // C6
+    // Atenção: nas regiões de referência guitarra (43–64) e teclado (60–84) se
+    // tocam em 60–64. É uma consequência das regiões acima; manter o teclado no
+    // piso C4 preserva o espalhamento (drop 2) — subir o piso faria a nota do
+    // meio cair fora. Os registros de estilo são disjuntos e não têm esse toque.
+    public static final int KEYBOARD_LOW = Register.KEYBOARD.low();  // C4
+    public static final int KEYBOARD_HIGH = Register.KEYBOARD.high();// C6
 
     /**
-     * Teto para as notas DERIVADAS do baixo (quinta/oitava). A fundamental
-     * cabe em BASS_HIGH, mas um intervalo acima dela poderia invadir o
-     * registro da guitarra (voicings em ~52–62).
+     * Teto das notas DERIVADAS do baixo (quinta/oitava/terça). É o topo do
+     * próprio registro do baixo: uma nota derivada que subisse além disso
+     * invadiria o registro da guitarra, que por definição começa acima.
      */
-    public static final int BASS_DERIVED_HIGH = 50;
+    public static final int BASS_DERIVED_HIGH = Register.BASS.high(); // G2
 
     private VoicingService() {
     }
@@ -44,17 +51,26 @@ public final class VoicingService {
      * fundamental — não o acorde inteiro.
      */
     public static List<Integer> forBass(List<Integer> chordNotes) {
+        return forBass(chordNotes, Register.BASS);
+    }
+
+    public static List<Integer> forBass(List<Integer> chordNotes, Register register) {
         if (chordNotes == null || chordNotes.isEmpty()) {
-            return List.of(BASS_LOW);
+            return List.of(register.low());
         }
-        int note = chordNotes.stream().min(Integer::compare).orElse(BASS_LOW);
-        note = foldInto(note, BASS_LOW, BASS_HIGH);
+        int note = chordNotes.stream().min(Integer::compare).orElse(register.low());
+        note = foldInto(note, register.low(), register.high());
         return List.of(note);
     }
 
     /** Guitarra: acorde fechado na região média, com voice leading. */
     public static List<Integer> forGuitar(List<Integer> chordNotes, List<Integer> previousVoicing) {
-        return buildVoicing(chordNotes, previousVoicing, GUITAR_LOW, GUITAR_HIGH);
+        return forGuitar(chordNotes, previousVoicing, Register.GUITAR);
+    }
+
+    public static List<Integer> forGuitar(List<Integer> chordNotes, List<Integer> previousVoicing,
+                                         Register register) {
+        return buildVoicing(chordNotes, previousVoicing, register.low(), register.high());
     }
 
     /**
@@ -63,29 +79,93 @@ public final class VoicingService {
      * a quinta (classe de altura +7) na região do baixo.
      */
     public static int bassFifth(int root) {
-        int up = root + 7;
-        return up <= BASS_DERIVED_HIGH ? up : up - 12;
+        return bassDegree(root, 7, Register.BASS);
+    }
+
+    public static int bassFifth(int root, Register register) {
+        return bassDegree(root, 7, register);
     }
 
     /**
      * Oitava do baixo: uma oitava acima quando couber, senão uma abaixo.
      * Para fundamentais muito agudas (D#2 = 39) nenhuma das duas respeita a
-     * região do baixo, então mantém a fundamental — o baixo nunca sai de
-     * BASS_LOW..BASS_DERIVED_HIGH.
+     * região do baixo, então mantém a fundamental — o baixo nunca sai do
+     * próprio registro.
      */
     public static int bassOctave(int root) {
-        int up = root + 12;
-        if (up <= BASS_DERIVED_HIGH) {
+        return bassDegree(root, 12, Register.BASS);
+    }
+
+    public static int bassOctave(int root, Register register) {
+        return bassDegree(root, 12, register);
+    }
+
+    /**
+     * Terça do baixo. Usa a terça MAIOR por padrão, mas desce um semitom quando
+     * o acorde pede terça menor — assim a nota continua pertencendo ao acorde.
+     */
+    public static int bassThird(int root, List<Integer> chordNotes, Register register) {
+        return bassChordTone(root, 4, chordNotes, register);
+    }
+
+    /**
+     * Sexta do baixo (passagem). Se o acorde pedir terça menor, a sexta também
+     * desce — mantém a coerência modal do walking.
+     */
+    public static int bassSixth(int root, List<Integer> chordNotes, Register register) {
+        return bassChordTone(root, 9, chordNotes, register);
+    }
+
+    /** Sétima do baixo (passagem). Usa a sétima MENOR — o blues pede isso. */
+    public static int bassSeventh(int root, List<Integer> chordNotes, Register register) {
+        return bassChordTone(root, 10, chordNotes, register);
+    }
+
+    /**
+     * Terça/sexta como tom do acorde: parte do intervalo maior e, se esse tom
+     * não existir no acorde mas o menor existir, usa o menor.
+     */
+    private static int bassChordTone(int root, int majorInterval, List<Integer> chordNotes,
+                                     Register register) {
+        int candidate = bassDegree(root, majorInterval, register);
+        if (chordNotes == null || chordNotes.isEmpty()) {
+            return candidate;
+        }
+        Set<Integer> classes = new LinkedHashSet<>();
+        for (int note : chordNotes) {
+            classes.add(Math.floorMod(note, 12));
+        }
+        if (classes.contains(Math.floorMod(candidate, 12))) {
+            return candidate;
+        }
+        int minor = bassDegree(root, majorInterval - 1, register);
+        return classes.contains(Math.floorMod(minor, 12)) ? minor : candidate;
+    }
+
+    /**
+     * Um intervalo acima da fundamental, dobrado para baixo quando invade o
+     * topo do registro do baixo. Nunca sai de register.low()..register.high()
+     * (ou repete a fundamental quando nenhuma oitava cabe).
+     */
+    private static int bassDegree(int root, int interval, Register register) {
+        int up = root + interval;
+        if (up <= register.high()) {
             return up;
         }
-        int down = root - 12;
-        return down >= BASS_LOW ? down : root;
+        int down = up - 12;
+        return down >= register.low() ? down : root;
     }
 
     /** Teclado: acorde espalhado (drop 2) na região aguda, com voice leading. */
     public static List<Integer> forKeyboard(List<Integer> chordNotes, List<Integer> previousVoicing) {
-        List<Integer> voiced = buildVoicing(chordNotes, previousVoicing, KEYBOARD_LOW, KEYBOARD_HIGH);
-        return spreadVoicing(voiced, KEYBOARD_LOW, KEYBOARD_HIGH);
+        return forKeyboard(chordNotes, previousVoicing, Register.KEYBOARD);
+    }
+
+    public static List<Integer> forKeyboard(List<Integer> chordNotes, List<Integer> previousVoicing,
+                                            Register register) {
+        List<Integer> voiced = buildVoicing(chordNotes, previousVoicing,
+                register.low(), register.high());
+        return spreadVoicing(voiced, register.low(), register.high());
     }
 
     private static int foldInto(int note, int low, int high) {

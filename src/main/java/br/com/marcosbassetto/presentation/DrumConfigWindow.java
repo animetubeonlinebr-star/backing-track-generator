@@ -1,6 +1,7 @@
 package br.com.marcosbassetto.presentation;
 
 import br.com.marcosbassetto.model.drum.DrumConfig;
+import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import br.com.marcosbassetto.presentation.components.SequencerPanel;
 
@@ -23,6 +24,13 @@ public class DrumConfigWindow extends JDialog {
         JButton btnMidiConfig = new JButton("Mapeamento MIDI...");
         btnMidiConfig.addActionListener(_ -> openMidiConfigWindow());
         topPanel.add(btnMidiConfig);
+
+        topPanel.add(new JLabel("Intensidade:"));
+        JComboBox<Intensity> cmbIntensity = new JComboBox<>(Intensity.values());
+        cmbIntensity.setSelectedItem(drumConfig.getIntensity());
+        cmbIntensity.addActionListener(_ ->
+                drumConfig.setIntensity((Intensity) cmbIntensity.getSelectedItem()));
+        topPanel.add(cmbIntensity);
 
         sequencerPanel = new SequencerPanel(drumConfig);
         JScrollPane scrollPane = new JScrollPane(sequencerPanel);

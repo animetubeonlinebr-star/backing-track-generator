@@ -18,6 +18,8 @@ public class GuitarRhythmPattern {
     public static final String PRESET_DEDILHADO = "DEDILHADO";
     public static final String PRESET_BATIDA_BALADA = "BATIDA_BALADA";
     public static final String PRESET_REGGAE = "REGGAE";
+    public static final String PRESET_BLUES = "BLUES";
+    public static final String PRESET_BOSSA_NOVA = "BOSSA_NOVA";
 
     private AttackType[] steps;
 
@@ -72,6 +74,8 @@ public class GuitarRhythmPattern {
             case PRESET_DEDILHADO -> applyDedilhado(info);
             case PRESET_BATIDA_BALADA -> applyBatidaBalada(info);
             case PRESET_REGGAE -> applyReggae(info);
+            case PRESET_BLUES -> applyBlues(info);
+            case PRESET_BOSSA_NOVA -> applyBossaNova(info);
             case PRESET_BATIDA_BASICA -> applyBatidaBasica(info);
             default -> applyBatidaBasica(info);
         }
@@ -122,6 +126,40 @@ public class GuitarRhythmPattern {
         int stride = Math.max(1, spb / 2);
         for (int step = 0; step < steps.length; step += stride) {
             setAttack(step, AttackType.PICK);
+        }
+    }
+
+    /**
+     * Blues: shuffle. Cada tempo bate para baixo e repica na subdivisão da
+     * tercina — a "galope" que define o estilo.
+     */
+    private void applyBlues(TimeSignatureInfo info) {
+        int spb = info.stepsPerBeat();
+        for (int beat = 0; beat < info.beatsPerMeasure(); beat++) {
+            int beatStep = beat * spb;
+            setAttack(beatStep, AttackType.STRUM_DOWN);
+            setAttack(beatStep + (spb / 3), AttackType.PICK);
+            setAttack(beatStep + ((2 * spb) / 3), AttackType.STRUM_UP);
+        }
+    }
+
+    /**
+     * Bossa Nova: violão sincopado. Polegar nos tempos, dedos nos contratempos —
+     * por isso PICK na cabeça de cada tempo e STRUM_UP nas síncopes.
+     */
+    private void applyBossaNova(TimeSignatureInfo info) {
+        int spb = info.stepsPerBeat();
+        int beats = info.beatsPerMeasure();
+        int offBeat = spb / 2;
+
+        for (int beat = 0; beat < beats; beat++) {
+            setAttack(beat * spb, AttackType.PICK);
+        }
+        if (beats >= 2) {
+            setAttack(offBeat, AttackType.STRUM_UP);
+        }
+        if (beats >= 3) {
+            setAttack((2 * spb) + offBeat, AttackType.STRUM_UP);
         }
     }
 }

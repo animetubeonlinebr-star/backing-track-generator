@@ -1,5 +1,7 @@
 package br.com.marcosbassetto.model.drum;
 
+import br.com.marcosbassetto.model.music.Intensity;
+import br.com.marcosbassetto.model.music.StylePreset;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 
 import java.util.EnumMap;
@@ -8,8 +10,11 @@ import java.util.Map;
 @SuppressWarnings({"unused", "SpellCheckingInspection"})
 public class DrumConfig {
 
+    public static final int BASE_VELOCITY = 100;
+
     private TimeSignatureInfo timeSignatureInfo;
     private DrumPattern pattern;
+    private Intensity intensity = Intensity.MEDIA;
     private final Map<DrumInstrument, Boolean> enabledInstruments = new EnumMap<>(DrumInstrument.class);
     private final Map<DrumInstrument, Integer> midiNotes = new EnumMap<>(DrumInstrument.class);
 
@@ -26,6 +31,19 @@ public class DrumConfig {
             enabledInstruments.put(instrument, true);
             midiNotes.put(instrument, instrument.getDefaultMidiNote());
         }
+    }
+
+    /**
+     * Ajusta a levada ao estilo escolhido, de acordo com o compasso vigente.
+     * O padrão é escrito relativo ao compasso, então qualquer métrica funciona.
+     */
+    public void applyStyle(StylePreset style, TimeSignatureInfo timeInfo) {
+        if (style == null) {
+            return;
+        }
+        this.intensity = style.getIntensity();
+        TimeSignatureInfo info = timeInfo != null ? timeInfo : this.timeSignatureInfo;
+        this.pattern.applyStylePattern(style.getLabel(), info);
     }
 
 
@@ -94,10 +112,27 @@ public class DrumConfig {
     }
 
 
+    public Intensity getIntensity() {
+        return intensity;
+    }
+
+    public void setIntensity(Intensity intensity) {
+        if (intensity != null) {
+            this.intensity = intensity;
+        }
+    }
+
+    /** Velocity média da peça de bateria, já ajustada pela intensidade. */
+    public int getVelocity() {
+        return intensity.scale(BASE_VELOCITY);
+    }
+
+
     public void copyFrom(DrumConfig source) {
         if (source == null) return;
 
         this.timeSignatureInfo = source.timeSignatureInfo;
+        this.intensity = source.intensity;
 
         this.enabledInstruments.clear();
         this.enabledInstruments.putAll(source.enabledInstruments);

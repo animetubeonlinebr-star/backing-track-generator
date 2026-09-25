@@ -24,12 +24,16 @@ public class KeyboardRhythmPattern {
     public static final String PRESET_BLOCO_RITMICO = "BLOCO_RITMICO";
     public static final String PRESET_ARPEJO_UP = "ARPEJO_UP";
     public static final String PRESET_ARPEJO_DOWN = "ARPEJO_DOWN";
+    public static final String PRESET_BOSSA_NOVA = "BOSSA_NOVA";
+    public static final String PRESET_REGGAE = "REGGAE";
 
     public static final String[] ALL_PRESETS = {
             PRESET_PAD_SUSTENTADO,
             PRESET_BLOCO_RITMICO,
             PRESET_ARPEJO_UP,
-            PRESET_ARPEJO_DOWN
+            PRESET_ARPEJO_DOWN,
+            PRESET_BOSSA_NOVA,
+            PRESET_REGGAE
     };
 
     private AttackType[] steps;
@@ -118,6 +122,14 @@ public class KeyboardRhythmPattern {
                 appliedPreset = PRESET_ARPEJO_DOWN;
                 applyArpejoDown(info);
             }
+            case PRESET_BOSSA_NOVA -> {
+                appliedPreset = PRESET_BOSSA_NOVA;
+                applyBossaNova(info);
+            }
+            case PRESET_REGGAE -> {
+                appliedPreset = PRESET_REGGAE;
+                applyReggae(info);
+            }
             default -> {
                 appliedPreset = PRESET_PAD_SUSTENTADO;
                 applyPadSustentado(info);
@@ -169,6 +181,40 @@ public class KeyboardRhythmPattern {
         int spb = info.stepsPerBeat();
         for (int beat = 0; beat < info.beatsPerMeasure(); beat++) {
             setAttack(beat * spb, AttackType.ARP_DOWN);
+        }
+    }
+
+    /**
+     * Bossa Nova: acordes em bloco nas cabeças de tempo com síncope no
+     * contratempo do tempo 2 — o compasso partido do estilo.
+     */
+    private void applyBossaNova(TimeSignatureInfo info) {
+        if (info == null) {
+            return;
+        }
+        int spb = info.stepsPerBeat();
+        int beats = info.beatsPerMeasure();
+        int offBeat = spb / 2;
+
+        for (int beat = 0; beat < beats; beat++) {
+            setAttack(beat * spb, AttackType.BLOCK);
+        }
+        if (beats >= 2) {
+            setAttack(offBeat, AttackType.BLOCK);
+        }
+        if (beats >= 4) {
+            setAttack((3 * spb) + offBeat, AttackType.BLOCK);
+        }
+    }
+
+    /** Reggae: acorde em bloco só nos contratempos — o "skank". */
+    private void applyReggae(TimeSignatureInfo info) {
+        if (info == null) {
+            return;
+        }
+        int spb = info.stepsPerBeat();
+        for (int beat = 0; beat < info.beatsPerMeasure(); beat++) {
+            setAttack(beat * spb + (spb / 2), AttackType.BLOCK);
         }
     }
 }

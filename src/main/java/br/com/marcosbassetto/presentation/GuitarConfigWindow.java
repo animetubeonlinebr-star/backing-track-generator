@@ -2,6 +2,7 @@ package br.com.marcosbassetto.presentation;
 
 import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.guitar.GuitarRhythmPattern;
+import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 
 import javax.swing.*;
@@ -9,7 +10,7 @@ import java.awt.*;
 
 /**
  * Janela de configuração da guitarra rítmica: escolha do preset de ataques e
- * ajuste fino dos parâmetros de execução (offset da palhetada, velocities e
+ * ajuste fino dos parâmetros de execução (offset da palhetada, intensidade e
  * timbre). As alterações só são aplicadas ao confirmar.
  */
 public class GuitarConfigWindow extends JDialog {
@@ -28,9 +29,7 @@ public class GuitarConfigWindow extends JDialog {
 
     private final JComboBox<String> cmbPreset = new JComboBox<>(PRESETS);
     private final JSpinner spnStrumOffset = new JSpinner(new SpinnerNumberModel(15, 0, 60, 1));
-    private final JSpinner spnVelocityDown = new JSpinner(new SpinnerNumberModel(80, 0, 127, 1));
-    private final JSpinner spnVelocityUp = new JSpinner(new SpinnerNumberModel(65, 0, 127, 1));
-    private final JSpinner spnVelocityPick = new JSpinner(new SpinnerNumberModel(75, 0, 127, 1));
+    private final JComboBox<Intensity> cmbIntensity = new JComboBox<>(Intensity.values());
     private final JSpinner spnProgram = new JSpinner(new SpinnerNumberModel(25, 0, 127, 1));
 
     public GuitarConfigWindow(Window owner, GuitarConfig config, TimeSignatureInfo timeInfo,
@@ -52,12 +51,8 @@ public class GuitarConfigWindow extends JDialog {
         fields.add(cmbPreset);
         fields.add(new JLabel("Offset da palhetada (ticks)"));
         fields.add(spnStrumOffset);
-        fields.add(new JLabel("Velocity ↓ (batida para baixo)"));
-        fields.add(spnVelocityDown);
-        fields.add(new JLabel("Velocity ↑ (batida para cima)"));
-        fields.add(spnVelocityUp);
-        fields.add(new JLabel("Velocity do dedilhado"));
-        fields.add(spnVelocityPick);
+        fields.add(new JLabel("Intensidade"));
+        fields.add(cmbIntensity);
         fields.add(new JLabel("Program Change (timbre)"));
         fields.add(spnProgram);
 
@@ -80,9 +75,7 @@ public class GuitarConfigWindow extends JDialog {
     private void loadFromConfig() {
         cmbPreset.setSelectedItem(config.getPreset());
         spnStrumOffset.setValue(config.getStrumOffsetTicks());
-        spnVelocityDown.setValue(config.getVelocityDown());
-        spnVelocityUp.setValue(config.getVelocityUp());
-        spnVelocityPick.setValue(config.getVelocityPick());
+        cmbIntensity.setSelectedItem(config.getIntensity());
         spnProgram.setValue(config.getProgramChange());
     }
 
@@ -90,9 +83,7 @@ public class GuitarConfigWindow extends JDialog {
         String preset = (String) cmbPreset.getSelectedItem();
         config.setPreset(preset);
         config.setStrumOffsetTicks((int) spnStrumOffset.getValue());
-        config.setVelocityDown((int) spnVelocityDown.getValue());
-        config.setVelocityUp((int) spnVelocityUp.getValue());
-        config.setVelocityPick((int) spnVelocityPick.getValue());
+        config.setIntensity((Intensity) cmbIntensity.getSelectedItem());
         config.setProgramChange((int) spnProgram.getValue());
 
         if (timeInfo != null) {

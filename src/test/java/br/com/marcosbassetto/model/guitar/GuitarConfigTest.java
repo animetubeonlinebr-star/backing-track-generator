@@ -1,5 +1,6 @@
 package br.com.marcosbassetto.model.guitar;
 
+import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import org.junit.jupiter.api.Test;
 
@@ -71,17 +72,31 @@ class GuitarConfigTest {
     }
 
     @Test
-    void velocitiesAndProgramAreClamped() {
+    void intensityScalesVelocitiesWithoutClamping() {
         GuitarConfig config = new GuitarConfig();
-        config.setVelocityDown(200);
-        config.setVelocityUp(-10);
-        config.setVelocityPick(999);
+
+        config.setIntensity(Intensity.FORTE);
+        assertEquals(80, config.getVelocityDown());
+        assertEquals(65, config.getVelocityUp());
+        assertEquals(75, config.getVelocityPick());
+
+        config.setIntensity(Intensity.MEDIA);
+        assertEquals(68, config.getVelocityDown());
+        assertEquals(55, config.getVelocityUp());
+        assertEquals(64, config.getVelocityPick());
+
+        config.setIntensity(Intensity.BAIXA);
+        assertEquals(56, config.getVelocityDown());
+        assertEquals(46, config.getVelocityUp());
+        assertEquals(53, config.getVelocityPick());
+    }
+
+    @Test
+    void programIsClampedAndStrumOffsetNeverNegative() {
+        GuitarConfig config = new GuitarConfig();
         config.setProgramChange(200);
         config.setStrumOffsetTicks(-5);
 
-        assertEquals(127, config.getVelocityDown());
-        assertEquals(0, config.getVelocityUp());
-        assertEquals(127, config.getVelocityPick());
         assertEquals(127, config.getProgramChange());
         assertEquals(0, config.getStrumOffsetTicks());
     }

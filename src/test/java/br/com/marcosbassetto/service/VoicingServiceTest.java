@@ -1,5 +1,6 @@
 package br.com.marcosbassetto.service;
 
+import br.com.marcosbassetto.model.music.Register;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -215,14 +216,45 @@ class VoicingServiceTest {
 
     @Test
     void bassDerivedHighStaysBelowGuitarVoicings() {
-        assertTrue(VoicingService.BASS_DERIVED_HIGH < VoicingService.GUITAR_LOW
-                        || VoicingService.bassOctave(VoicingService.BASS_LOW)
-                        <= VoicingService.BASS_DERIVED_HIGH);
+        // O teto derivado é o topo do registro do baixo; nas regiões de
+        // referência ele apenas TOCA o piso da guitarra (43), a mesma fronteira
+        // documentada para a fundamental do baixo.
+        assertTrue(VoicingService.BASS_DERIVED_HIGH <= VoicingService.GUITAR_LOW,
+                "o teto das notas derivadas nao pode passar do piso da guitarra");
 
         // O caso concreto que motivou o teto: G2 = 43 (comum) com oitava ingênua = 55
         assertEquals(55, 43 + 12, "aritmetica ingenua cairia na guitarra");
         assertTrue(VoicingService.bassOctave(43) <= VoicingService.BASS_DERIVED_HIGH,
                 "a oitava derivada deve ficar abaixo do teto");
+    }
+
+    @Test
+    void bassDegreesRespectACustomRegister() {
+        Register tight = new Register(28, 36);
+
+        for (int root = tight.low(); root <= tight.high(); root++) {
+            for (int degree : List.of(
+                    VoicingService.bassThird(root, G7, tight),
+                    VoicingService.bassFifth(root, tight),
+                    VoicingService.bassSixth(root, G7, tight),
+                    VoicingService.bassSeventh(root, G7, tight),
+                    VoicingService.bassOctave(root, tight))) {
+                assertTrue(degree >= tight.low() && degree <= tight.high(),
+                        "grau " + degree + " fora do registro apertado (root " + root + ")");
+            }
+        }
+    }
+
+    @Test
+    void bassThirdFollowsTheChordQuality() {
+        List<Integer> cMajor = List.of(60, 64, 67);   // C E G
+        List<Integer> cMinor = List.of(60, 63, 67);   // C Eb G
+
+        int majorThird = VoicingService.bassThird(36, cMajor, Register.BASS);
+        int minorThird = VoicingService.bassThird(36, cMinor, Register.BASS);
+
+        assertEquals(4, Math.floorMod(majorThird - 36, 12), "C maior pede a terca maior");
+        assertEquals(3, Math.floorMod(minorThird - 36, 12), "C menor pede a terca menor");
     }
 
     @Test

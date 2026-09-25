@@ -3,6 +3,7 @@ package br.com.marcosbassetto.service;
 import br.com.marcosbassetto.model.keyboard.KeyboardConfig;
 import br.com.marcosbassetto.model.keyboard.KeyboardRhythmPattern;
 import br.com.marcosbassetto.model.music.BackingTrack;
+import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +14,7 @@ import javax.sound.midi.Track;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -281,17 +283,41 @@ class KeyboardMidiServiceTest {
     }
 
     @Test
-    void velocityComesFromConfig() throws Exception {
+    void velocityIsHumanizedAroundTheIntensityMean() throws Exception {
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
         KeyboardConfig config = new KeyboardConfig(timeInfo);
-        config.setVelocity(55);
+        config.applyPreset(KeyboardRhythmPattern.PRESET_ARPEJO_UP, timeInfo);
+        config.setIntensity(Intensity.FORTE); // media 70
 
         Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
         new KeyboardMidiService(config, timeInfo)
+                .generateKeyboardTrack(sequence, chord("C - Am - Dm - G", "4/4"), 7680, PPQ);
+
+        List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
+        assertTrue(ons.size() > 4);
+        assertTrue(ons.stream().mapToInt(NoteOn::velocity).distinct().count() > 1,
+                "velocity deve ser humanizada");
+        assertTrue(ons.stream().allMatch(n -> n.velocity() >= 1 && n.velocity() <= 127));
+        double mean = ons.stream().mapToInt(NoteOn::velocity).average().orElseThrow();
+        assertTrue(Math.abs(mean - 70) <= 8, "media perto de 70, foi " + mean);
+    }
+
+    @Test
+    void chordTonesGetNaturalVelocitySpread() throws Exception {
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
+        KeyboardConfig config = new KeyboardConfig(timeInfo);
+        config.applyPreset(KeyboardRhythmPattern.PRESET_PAD_SUSTENTADO, timeInfo);
+        config.setIntensity(Intensity.FORTE);
+
+        Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
+        new KeyboardMidiService(config, timeInfo, new VelocityHumanizer(new Random(7), 0))
                 .generateKeyboardTrack(sequence, chord("C", "4/4"), 1920, PPQ);
 
-        assertTrue(noteOns(sequence.getTracks()[0]).stream()
-                .allMatch(n -> n.velocity() == 55));
+        List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
+        assertEquals(3, ons.size());
+        // Sem aleatoriedade, sobra o acento de fundamental: grave > agudo.
+        assertTrue(ons.get(0).velocity() > ons.get(2).velocity(),
+                "nota grave do acorde deve ser mais forte que a aguda");
     }
 
     @Test

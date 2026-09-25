@@ -2,13 +2,14 @@ package br.com.marcosbassetto.presentation;
 
 import br.com.marcosbassetto.model.keyboard.KeyboardConfig;
 import br.com.marcosbassetto.model.keyboard.KeyboardRhythmPattern;
+import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 
 import javax.swing.*;
 import java.awt.*;
 
 /**
- * Janela de configuração do teclado: preset rítmico, timbre, velocity,
+ * Janela de configuração do teclado: preset rítmico, timbre, intensidade,
  * duração das notas e pedal de sustain.
  */
 public class KeyboardConfigWindow extends JDialog {
@@ -38,7 +39,7 @@ public class KeyboardConfigWindow extends JDialog {
 
     private final JComboBox<String> comboPreset;
     private final JComboBox<String> comboProgram;
-    private final JSlider sliderVelocity;
+    private final JComboBox<Intensity> comboIntensity;
     private final JSlider sliderDuration;
     private final JCheckBox chkSustain;
 
@@ -55,12 +56,8 @@ public class KeyboardConfigWindow extends JDialog {
         comboProgram = new JComboBox<>(PROGRAM_NAMES);
         comboProgram.setSelectedIndex(findProgramIndex(config.getProgramChange()));
 
-        sliderVelocity = new JSlider(KeyboardConfig.MIN_VELOCITY,
-                KeyboardConfig.MAX_VELOCITY, config.getVelocity());
-        sliderVelocity.setMajorTickSpacing(20);
-        sliderVelocity.setMinorTickSpacing(5);
-        sliderVelocity.setPaintTicks(true);
-        sliderVelocity.setPaintLabels(true);
+        comboIntensity = new JComboBox<>(Intensity.values());
+        comboIntensity.setSelectedItem(config.getIntensity());
 
         sliderDuration = new JSlider(KeyboardConfig.MIN_DURATION_PERCENT,
                 KeyboardConfig.MAX_DURATION_PERCENT, config.getNoteDurationPercent());
@@ -113,10 +110,10 @@ public class KeyboardConfigWindow extends JDialog {
         gbc.gridx = 0;
         gbc.gridy = 2;
         gbc.weightx = 0;
-        panel.add(new JLabel("Velocity:"), gbc);
+        panel.add(new JLabel("Intensidade:"), gbc);
         gbc.gridx = 1;
         gbc.weightx = 1;
-        panel.add(sliderVelocity, gbc);
+        panel.add(comboIntensity, gbc);
 
         gbc.gridx = 0;
         gbc.gridy = 3;
@@ -169,7 +166,7 @@ public class KeyboardConfigWindow extends JDialog {
     }
 
     private void saveAndClose() {
-        config.setVelocity(sliderVelocity.getValue());
+        config.setIntensity((Intensity) comboIntensity.getSelectedItem());
         config.setNoteDurationPercent(sliderDuration.getValue());
         config.setSustainEnabled(chkSustain.isSelected());
         config.setProgramChange(extractProgram((String) comboProgram.getSelectedItem()));

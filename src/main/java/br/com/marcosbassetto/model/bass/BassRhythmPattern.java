@@ -16,7 +16,10 @@ public class BassRhythmPattern {
     public enum BassNoteType {
         NONE,   // silêncio
         ROOT,   // fundamental
+        THIRD,  // terça (+4 semitons; aceita a terça menor se o acorde pedir)
         FIFTH,  // quinta (+7 semitons)
+        SIXTH,  // sexta (+9 semitons) — passagem
+        SEVENTH,// sétima (+10 semitons) — passagem
         OCTAVE  // oitava (+12 semitons)
     }
 
@@ -24,12 +27,16 @@ public class BassRhythmPattern {
     public static final String PRESET_FUNDAMENTAL_E_QUINTA = "FUNDAMENTAL_E_QUINTA";
     public static final String PRESET_CAMINHANTE = "CAMINHANTE";
     public static final String PRESET_REGGAE = "REGGAE";
+    public static final String PRESET_BLUES_SHUFFLE = "BLUES_SHUFFLE";
+    public static final String PRESET_WALKING_BLUES = "WALKING_BLUES";
 
     public static final String[] ALL_PRESETS = {
             PRESET_FUNDAMENTAL_SIMPLES,
             PRESET_FUNDAMENTAL_E_QUINTA,
             PRESET_CAMINHANTE,
-            PRESET_REGGAE
+            PRESET_REGGAE,
+            PRESET_BLUES_SHUFFLE,
+            PRESET_WALKING_BLUES
     };
 
     private BassNoteType[] steps;
@@ -119,6 +126,14 @@ public class BassRhythmPattern {
                 appliedPreset = PRESET_REGGAE;
                 applyReggae(info);
             }
+            case PRESET_BLUES_SHUFFLE -> {
+                appliedPreset = PRESET_BLUES_SHUFFLE;
+                applyBluesShuffle(info);
+            }
+            case PRESET_WALKING_BLUES -> {
+                appliedPreset = PRESET_WALKING_BLUES;
+                applyWalkingBlues(info);
+            }
             default -> {
                 appliedPreset = PRESET_FUNDAMENTAL_SIMPLES;
                 applyFundamentalSimples(info);
@@ -179,6 +194,43 @@ public class BassRhythmPattern {
         for (int beat = 0; beat < info.beatsPerMeasure(); beat++) {
             int step = beat % 2 == 0 ? beat * spb : beat * spb + syncopation;
             setNoteType(step, BassNoteType.ROOT);
+        }
+    }
+
+    /**
+     * Blues shuffle: fundamental na cabeça do tempo e o "repique" na tercina,
+     * alternando com a quinta. 12/8 → R . . F . . R . . F . . (por tempo).
+     */
+    private void applyBluesShuffle(TimeSignatureInfo info) {
+        if (info == null) {
+            return;
+        }
+        int spb = info.stepsPerBeat();
+        for (int beat = 0; beat < info.beatsPerMeasure(); beat++) {
+            int beatStep = beat * spb;
+            setNoteType(beatStep, BassNoteType.ROOT);
+            setNoteType(beatStep + (spb / 3), BassNoteType.FIFTH);
+        }
+    }
+
+    /**
+     * Walking blues: uma nota por tempo, andando pela escala do acorde —
+     * fundamental, terça, quinta e sétima. Dá o movimento do walking bass.
+     * 4/4 → R . . . T . . . F . . . S . . .
+     */
+    private void applyWalkingBlues(TimeSignatureInfo info) {
+        if (info == null) {
+            return;
+        }
+        int spb = info.stepsPerBeat();
+        for (int beat = 0; beat < info.beatsPerMeasure(); beat++) {
+            BassNoteType type = switch (beat % 4) {
+                case 1 -> BassNoteType.THIRD;
+                case 2 -> BassNoteType.FIFTH;
+                case 3 -> BassNoteType.SEVENTH;
+                default -> BassNoteType.ROOT;
+            };
+            setNoteType(beat * spb, type);
         }
     }
 }

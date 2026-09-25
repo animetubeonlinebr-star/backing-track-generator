@@ -27,21 +27,38 @@ public class GuitarMidiService {
     private final ChordService chordService = new ChordService();
     private final GuitarConfig config;
     private final TimeSignatureInfo timeInfo;
+    private final VelocityHumanizer humanizer;
 
     public GuitarMidiService(GuitarConfig config, TimeSignatureInfo timeInfo) {
+        this(config, timeInfo, new VelocityHumanizer());
+    }
+
+    public GuitarMidiService(GuitarConfig config, TimeSignatureInfo timeInfo,
+                             VelocityHumanizer humanizer) {
         this.config = config != null ? config : new GuitarConfig();
         this.timeInfo = timeInfo;
+        this.humanizer = humanizer != null ? humanizer : new VelocityHumanizer();
     }
 
     public void generateGuitarTrack(Sequence sequence, BackingTrack backingTrack,
                                     long totalTicks, int ppq) throws InvalidMidiDataException {
+        generateGuitarTrack(sequence, backingTrack, totalTicks, ppq, sequence.createTrack());
+    }
 
-        Track track = sequence.createTrack();
+    /**
+     * Gera a track de guitarra dentro de uma track já existente. Usado tanto pelo
+     * arquivo único (track própria) quanto pelo MIDI individual do instrumento.
+     */
+    public void generateGuitarTrack(Sequence sequence, BackingTrack backingTrack,
+                                    long totalTicks, int ppq, Track track)
+            throws InvalidMidiDataException {
+
         setProgramChange(track, CHANNEL_GUITAR, config.getProgramChange(), 0);
 
         String[] chords = backingTrack.getProgression().split("\\s*-\\s*");
         long measureTicks = timeInfo.getMeasureTicks(ppq);
         long stepTicks = timeInfo.getStepTicks(ppq);
+        int stepsPerBeat = timeInfo.stepsPerBeat();
         GuitarRhythmPattern pattern = config.getPattern();
 
         List<Integer> previousVoicing = null;
@@ -50,7 +67,7 @@ public class GuitarMidiService {
 
         while (currentMeasureTick < totalTicks) {
             List<Integer> rawNotes = chordService.getMidiNotes(chords[chordIndex % chords.length]);
-            List<Integer> voicing = VoicingService.forGuitar(rawNotes, previousVoicing);
+            List<Integer> voicing = VoicingService.forGuitar(rawNotes, previousVoicing, config.getRegister());
             previousVoicing = voicing;
 
             for (int step = 0; step < pattern.getTotalSteps(); step++) {
@@ -65,9 +82,11 @@ public class GuitarMidiService {
                 }
 
                 switch (attack) {
-                    case STRUM_DOWN -> playStrum(track, voicing, attackTick, stepTicks, true);
-                    case STRUM_UP -> playStrum(track, voicing, attackTick, stepTicks, false);
-                    case PICK -> playPick(track, voicing, attackTick, stepTicks);
+                    case STRUM_DOWN -> playStrum(track, voicing, attackTick, stepTicks, true,
+                            step, stepsPerBeat);
+                    case STRUM_UP -> playStrum(track, voicing, attackTick, stepTicks, false,
+                            step, stepsPerBeat);
+                    case PICK -> playPick(track, voicing, attackTick, stepTicks, step, stepsPerBeat);
                     case NONE -> { }
                 }
             }
@@ -79,13 +98,19 @@ public class GuitarMidiService {
 
     /** Batida: notas em sequência, graves primeiro (down) ou agudos primeiro (up). */
     private void playStrum(Track track, List<Integer> notes, long startTick,
-                           long stepTicks, boolean down) {
+                           long stepTicks, boolean down, int step, int stepsPerBeat) {
         List<Integer> ordered = down ? notes : reversed(notes);
-        int velocity = down ? config.getVelocityDown() : config.getVelocityUp();
+        int meanVelocity = down ? config.getVelocityDown() : config.getVelocityUp();
+        int stepAccent = humanizer.accentForStep(step, stepsPerBeat);
         long noteOffTick = startTick + stepTicks - NOTE_OFF_GAP_TICKS;
 
         for (int i = 0; i < ordered.size(); i++) {
             int note = ordered.get(i);
+            // O índice na ordem de execução não é a ordem de altura; inverte no up
+            // para o acento de fundamental recair sempre sobre a nota grave.
+            int pitchIndex = down ? i : ordered.size() - 1 - i;
+            int velocity = humanizer.humanize(meanVelocity,
+                    stepAccent + humanizer.accentForChordTone(pitchIndex, ordered.size()));
             long tick = startTick + ((long) i * config.getStrumOffsetTicks());
             addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_GUITAR, note, velocity, tick);
             addNoteEvent(track, ShortMessage.NOTE_OFF, CHANNEL_GUITAR, note, 0,
@@ -94,16 +119,20 @@ public class GuitarMidiService {
     }
 
     /** Dedilhado: uma nota por vez, em sequência dentro do passo. */
-    private void playPick(Track track, List<Integer> notes, long startTick, long stepTicks) {
+    private void playPick(Track track, List<Integer> notes, long startTick, long stepTicks,
+                          int step, int stepsPerBeat) {
         if (notes.isEmpty()) {
             return;
         }
+        int meanVelocity = config.getVelocityPick();
+        int stepAccent = humanizer.accentForStep(step, stepsPerBeat);
         long subStep = Math.max(1, stepTicks / notes.size());
         for (int i = 0; i < notes.size(); i++) {
             int note = notes.get(i);
+            int velocity = humanizer.humanize(meanVelocity,
+                    stepAccent + humanizer.accentForChordTone(i, notes.size()));
             long tick = startTick + ((long) i * subStep);
-            addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_GUITAR, note,
-                    config.getVelocityPick(), tick);
+            addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_GUITAR, note, velocity, tick);
             addNoteEvent(track, ShortMessage.NOTE_OFF, CHANNEL_GUITAR, note, 0,
                     Math.max(tick + 1, tick + subStep - NOTE_OFF_GAP_TICKS));
         }

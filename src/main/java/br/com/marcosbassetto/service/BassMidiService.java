@@ -28,10 +28,17 @@ public class BassMidiService {
     private final ChordService chordService = new ChordService();
     private final BassConfig config;
     private final TimeSignatureInfo timeInfo;
+    private final VelocityHumanizer humanizer;
 
     public BassMidiService(BassConfig config, TimeSignatureInfo timeInfo) {
+        this(config, timeInfo, new VelocityHumanizer());
+    }
+
+    public BassMidiService(BassConfig config, TimeSignatureInfo timeInfo,
+                           VelocityHumanizer humanizer) {
         this.config = config != null ? config : new BassConfig(timeInfo);
         this.timeInfo = timeInfo;
+        this.humanizer = humanizer != null ? humanizer : new VelocityHumanizer();
     }
 
     /**
@@ -45,8 +52,17 @@ public class BassMidiService {
      */
     public void generateBassTrack(Sequence sequence, BackingTrack backingTrack,
                                   long totalTicks, int ppq) throws InvalidMidiDataException {
+        generateBassTrack(sequence, backingTrack, totalTicks, ppq, sequence.createTrack());
+    }
 
-        Track track = sequence.createTrack();
+    /**
+     * Gera a track de baixo dentro de uma track já existente. Usado tanto pelo
+     * arquivo único (track própria) quanto pelo MIDI individual do instrumento.
+     */
+    public void generateBassTrack(Sequence sequence, BackingTrack backingTrack,
+                                  long totalTicks, int ppq, Track track)
+            throws InvalidMidiDataException {
+
         setProgramChange(track, CHANNEL_BASS, config.getProgramChange(), 0);
 
         String[] chords = backingTrack.getProgression().split("\\s*-\\s*");
@@ -56,6 +72,7 @@ public class BassMidiService {
                 (stepTicks * config.getNoteDurationPercent()) / 100);
 
         BassRhythmPattern pattern = config.getPattern();
+        int stepsPerBeat = timeInfo.stepsPerBeat();
 
         long currentMeasureTick = 0;
         int chordIndex = 0;
@@ -65,9 +82,12 @@ public class BassMidiService {
             List<Integer> rawNotes = chordService.getMidiNotes(chordSymbol);
 
             // Baixo não guarda estado entre compassos — só a fundamental importa.
-            int root = VoicingService.forBass(rawNotes).get(0);
-            int fifth = VoicingService.bassFifth(root);
-            int octave = VoicingService.bassOctave(root);
+            int root = VoicingService.forBass(rawNotes, config.getRegister()).get(0);
+            int third = VoicingService.bassThird(root, rawNotes, config.getRegister());
+            int fifth = VoicingService.bassFifth(root, config.getRegister());
+            int sixth = VoicingService.bassSixth(root, rawNotes, config.getRegister());
+            int seventh = VoicingService.bassSeventh(root, rawNotes, config.getRegister());
+            int octave = VoicingService.bassOctave(root, config.getRegister());
 
             for (int step = 0; step < pattern.getTotalSteps(); step++) {
                 BassRhythmPattern.BassNoteType type = pattern.getNoteType(step);
@@ -82,13 +102,18 @@ public class BassMidiService {
 
                 int note = switch (type) {
                     case ROOT -> root;
+                    case THIRD -> third;
                     case FIFTH -> fifth;
+                    case SIXTH -> sixth;
+                    case SEVENTH -> seventh;
                     case OCTAVE -> octave;
                     case NONE -> root;
                 };
 
+                int accent = humanizer.accentForStep(step, stepsPerBeat)
+                        + humanizer.accentForChordTone(degreeIndex(type), 3);
                 addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_BASS,
-                        note, config.getVelocity(), tick);
+                        note, humanizer.humanize(config.getVelocity(), accent), tick);
                 addNoteEvent(track, ShortMessage.NOTE_OFF, CHANNEL_BASS,
                         note, 0, tick + noteDuration);
             }
@@ -96,6 +121,17 @@ public class BassMidiService {
             currentMeasureTick += measureTicks;
             chordIndex++;
         }
+    }
+
+    /** Posição do grau no acorde: fundamental mais grave, passagens mais agudas. */
+    private static int degreeIndex(BassRhythmPattern.BassNoteType type) {
+        return switch (type) {
+            case ROOT -> 0;
+            case THIRD -> 1;
+            case FIFTH -> 2;
+            case SIXTH, SEVENTH -> 3;
+            case OCTAVE, NONE -> 4;
+        };
     }
 
     private void addNoteEvent(Track track, int command, int channel, int note,

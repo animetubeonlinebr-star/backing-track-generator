@@ -5,17 +5,23 @@ import br.com.marcosbassetto.model.drum.DrumConfig;
 import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.keyboard.KeyboardConfig;
 import br.com.marcosbassetto.model.music.BackingTrack;
+import br.com.marcosbassetto.model.music.Instrument;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 
 import javax.sound.midi.*;
 import javax.swing.*;
 import java.io.File;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class MidiGenerationService {
 
     private static final int CHANNEL_HARMONY = 0;
     private static final int PPQ = 480;
+    private static final String FULL_MIX_FILE_NAME = "backing_track.mid";
 
     private final BackingTrack backingTrack;
     private final DrumConfig drumConfig;
@@ -50,7 +56,7 @@ public class MidiGenerationService {
     public void generate() {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("Salvar Arquivo MIDI");
-        fileChooser.setSelectedFile(new File("backing_track.mid"));
+        fileChooser.setSelectedFile(new File(FULL_MIX_FILE_NAME));
 
         int userSelection = fileChooser.showSaveDialog(null);
 
@@ -64,12 +70,73 @@ public class MidiGenerationService {
             try {
                 Sequence sequence = createSequence();
                 MidiSystem.write(sequence, 1, outputFile);
-                JOptionPane.showMessageDialog(null, "MIDI gerado com sucesso!\nSalvo em: " + outputFile.getAbsolutePath());
+
+                Map<Instrument, File> instrumentFiles = writeInstrumentFiles(outputFile);
+
+                StringBuilder message = new StringBuilder("MIDI gerado com sucesso!")
+                        .append("\nArquivo completo: ").append(outputFile.getAbsolutePath());
+                for (Map.Entry<Instrument, File> entry : instrumentFiles.entrySet()) {
+                    message.append("\n").append(entry.getKey().getLabel())
+                            .append(": ").append(entry.getValue().getAbsolutePath());
+                }
+                JOptionPane.showMessageDialog(null, message.toString());
             } catch (Exception e) {
                 e.printStackTrace();
                 JOptionPane.showMessageDialog(null, "Erro ao gerar arquivo MIDI: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
             }
         }
+    }
+
+    /** Grava um MIDI por instrumento na mesma pasta do arquivo completo. */
+    public Map<Instrument, File> writeInstrumentFiles(File outputFile) throws Exception {
+        File directory = outputFile.getAbsoluteFile().getParentFile();
+        Map<Instrument, File> files = new EnumMap<>(Instrument.class);
+
+        for (Map.Entry<Instrument, Sequence> entry : createInstrumentSequences().entrySet()) {
+            File instrumentFile = new File(directory, entry.getKey().getFileName());
+            MidiSystem.write(entry.getValue(), 1, instrumentFile);
+            files.put(entry.getKey(), instrumentFile);
+        }
+        return files;
+    }
+
+    /**
+     * Monta uma sequência independente por instrumento habilitado, contendo
+     * apenas a track do próprio instrumento (mais os metadados de tempo/compasso,
+     * sem os quais alguns players não tocam o arquivo corretamente).
+     */
+    public Map<Instrument, Sequence> createInstrumentSequences() throws InvalidMidiDataException {
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse(backingTrack.getMeasure());
+        int bpm = parseBpm(backingTrack.getBpm());
+        int totalSeconds = (parseDuration(backingTrack.getDurationMinutes()) * 60) + parseDuration(backingTrack.getDurationSeconds());
+        long totalTicks = ticksForTotalDuration(bpm, totalSeconds);
+
+        Map<Instrument, Sequence> sequences = new EnumMap<>(Instrument.class);
+        for (Instrument instrument : Instrument.values()) {
+            if (!isEnabled(instrument)) {
+                continue;
+            }
+            Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
+            Track controlTrack = sequence.createTrack();
+            setTempo(controlTrack, bpm);
+            writeTimeSignatureEvent(controlTrack, timeInfo);
+            appendInstrumentTrack(sequence, instrument, timeInfo, totalTicks);
+            sequences.put(instrument, sequence);
+        }
+        return sequences;
+    }
+
+    private Set<Instrument> enabledInstruments() {
+        Set<Instrument> enabled = EnumSet.noneOf(Instrument.class);
+        if (enableGuitar) enabled.add(Instrument.GUITAR);
+        if (enableBass) enabled.add(Instrument.BASS);
+        if (enableKeyboard) enabled.add(Instrument.KEYBOARD);
+        if (enableDrums) enabled.add(Instrument.DRUMS);
+        return enabled;
+    }
+
+    private boolean isEnabled(Instrument instrument) {
+        return enabledInstruments().contains(instrument);
     }
 
     public Sequence createSequence() throws InvalidMidiDataException {
@@ -78,7 +145,6 @@ public class MidiGenerationService {
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse(backingTrack.getMeasure());
 
         Track controlTrack = sequence.createTrack();
-        Track drumTrack = sequence.createTrack();
 
         int bpm = parseBpm(backingTrack.getBpm());
         int totalSeconds = (parseDuration(backingTrack.getDurationMinutes()) * 60) + parseDuration(backingTrack.getDurationSeconds());
@@ -90,33 +156,49 @@ public class MidiGenerationService {
         programChange.setMessage(ShortMessage.PROGRAM_CHANGE, CHANNEL_HARMONY, 0, 0);
         controlTrack.add(new MidiEvent(programChange, 0));
 
-        double totalMinutes = totalSeconds / 60.0;
-        long totalTicks = (long) (totalMinutes * bpm * PPQ);
+        long totalTicks = ticksForTotalDuration(bpm, totalSeconds);
 
         addHarmonyTrack(sequence, backingTrack, timeInfo, totalTicks);
-        if (enableDrums) {
-            drumMidiService.generateDrumTrack(drumTrack, drumConfig, PPQ, totalTicks);
-        }
-        if (enableGuitar) {
-            guitarConfig.syncPatternTo(timeInfo);
-            new GuitarMidiService(guitarConfig, timeInfo)
-                    .generateGuitarTrack(sequence, backingTrack, totalTicks, PPQ);
-        }
-        if (enableBass) {
-            BassConfig effectiveBassConfig = bassConfig != null ? bassConfig : new BassConfig(timeInfo);
-            effectiveBassConfig.syncToTimeSignature(timeInfo);
-            new BassMidiService(effectiveBassConfig, timeInfo)
-                    .generateBassTrack(sequence, backingTrack, totalTicks, PPQ);
-        }
-        if (enableKeyboard) {
-            KeyboardConfig effectiveKeyboardConfig =
-                    keyboardConfig != null ? keyboardConfig : new KeyboardConfig(timeInfo);
-            effectiveKeyboardConfig.syncToTimeSignature(timeInfo);
-            new KeyboardMidiService(effectiveKeyboardConfig, timeInfo)
-                    .generateKeyboardTrack(sequence, backingTrack, totalTicks, PPQ);
+        for (Instrument instrument : Instrument.values()) {
+            if (isEnabled(instrument)) {
+                appendInstrumentTrack(sequence, instrument, timeInfo, totalTicks);
+            }
         }
 
         return sequence;
+    }
+
+    private long ticksForTotalDuration(int bpm, int totalSeconds) {
+        double totalMinutes = totalSeconds / 60.0;
+        return (long) (totalMinutes * bpm * PPQ);
+    }
+
+    /** Gera a track do instrumento como uma nova track da sequência informada. */
+    private void appendInstrumentTrack(Sequence sequence, Instrument instrument,
+                                       TimeSignatureInfo timeInfo,
+                                       long totalTicks) throws InvalidMidiDataException {
+        Track track = sequence.createTrack();
+        switch (instrument) {
+            case GUITAR -> {
+                guitarConfig.syncPatternTo(timeInfo);
+                new GuitarMidiService(guitarConfig, timeInfo)
+                        .generateGuitarTrack(sequence, backingTrack, totalTicks, PPQ, track);
+            }
+            case BASS -> {
+                BassConfig effectiveBassConfig = bassConfig != null ? bassConfig : new BassConfig(timeInfo);
+                effectiveBassConfig.syncToTimeSignature(timeInfo);
+                new BassMidiService(effectiveBassConfig, timeInfo)
+                        .generateBassTrack(sequence, backingTrack, totalTicks, PPQ, track);
+            }
+            case KEYBOARD -> {
+                KeyboardConfig effectiveKeyboardConfig =
+                        keyboardConfig != null ? keyboardConfig : new KeyboardConfig(timeInfo);
+                effectiveKeyboardConfig.syncToTimeSignature(timeInfo);
+                new KeyboardMidiService(effectiveKeyboardConfig, timeInfo)
+                        .generateKeyboardTrack(sequence, backingTrack, totalTicks, PPQ, track);
+            }
+            case DRUMS -> drumMidiService.generateDrumTrack(track, drumConfig, PPQ, totalTicks);
+        }
     }
 
     private void addHarmonyTrack(Sequence sequence, BackingTrack backingTrack, TimeSignatureInfo timeInfo, long totalTicks) {

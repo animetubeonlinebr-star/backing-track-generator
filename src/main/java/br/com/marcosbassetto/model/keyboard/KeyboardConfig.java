@@ -1,21 +1,27 @@
 package br.com.marcosbassetto.model.keyboard;
 
+import br.com.marcosbassetto.model.music.Intensity;
+import br.com.marcosbassetto.model.music.Register;
+import br.com.marcosbassetto.model.music.StylePreset;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 
 /**
- * Configurações editáveis do teclado: padrão rítmico, velocity, timbre,
+ * Configurações editáveis do teclado: padrão rítmico, intensidade, timbre,
  * duração das notas e pedal de sustain.
+ *
+ * <p>A intensidade define a velocity média; a humanização por nota é aplicada
+ * no {@code KeyboardMidiService}.
  */
 public class KeyboardConfig {
 
-    public static final int MIN_VELOCITY = 40;
-    public static final int MAX_VELOCITY = 110;
+    public static final int BASE_VELOCITY = 70;
     public static final int MIN_DURATION_PERCENT = 50;
     public static final int MAX_DURATION_PERCENT = 100;
 
     private KeyboardRhythmPattern pattern;
     private String preset = KeyboardRhythmPattern.PRESET_PAD_SUSTENTADO;
-    private int velocity = 70;
+    private Intensity intensity = Intensity.MEDIA;
+    private Register register = Register.KEYBOARD;
     private int programChange = 0;        // Acoustic Grand Piano
     private int noteDurationPercent = 95; // piano sustenta naturalmente
     private boolean sustainEnabled = true;
@@ -23,6 +29,31 @@ public class KeyboardConfig {
     public KeyboardConfig(TimeSignatureInfo timeInfo) {
         TimeSignatureInfo info = timeInfo != null ? timeInfo : TimeSignatureInfo.parse("4/4");
         this.pattern = new KeyboardRhythmPattern(info.totalSteps(), info, preset);
+    }
+
+    /**
+     * Aplica a configuração padrão de um estilo: padrão rítmico, intensidade,
+     * timbre e região de alturas — esta última escolhida para não disputar
+     * espaço com o baixo nem com a guitarra.
+     */
+    public void applyStyle(StylePreset style, TimeSignatureInfo timeInfo) {
+        if (style == null) {
+            return;
+        }
+        this.intensity = style.getIntensity();
+        this.register = style.getKeyboardRegister();
+        this.programChange = style.getKeyboardProgram();
+        applyPreset(style.getKeyboardPattern(), timeInfo);
+    }
+
+    public Register getRegister() {
+        return register;
+    }
+
+    public void setRegister(Register register) {
+        if (register != null) {
+            this.register = register;
+        }
     }
 
     public KeyboardRhythmPattern getPattern() {
@@ -59,12 +90,19 @@ public class KeyboardConfig {
         }
     }
 
-    public int getVelocity() {
-        return velocity;
+    public Intensity getIntensity() {
+        return intensity;
     }
 
-    public void setVelocity(int velocity) {
-        this.velocity = clamp(velocity, MIN_VELOCITY, MAX_VELOCITY);
+    public void setIntensity(Intensity intensity) {
+        if (intensity != null) {
+            this.intensity = intensity;
+        }
+    }
+
+    /** Velocity média do acorde, já ajustada pela intensidade. */
+    public int getVelocity() {
+        return intensity.scale(BASE_VELOCITY);
     }
 
     public int getProgramChange() {

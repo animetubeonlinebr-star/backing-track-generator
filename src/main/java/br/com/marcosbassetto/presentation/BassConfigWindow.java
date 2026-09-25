@@ -2,14 +2,15 @@ package br.com.marcosbassetto.presentation;
 
 import br.com.marcosbassetto.model.bass.BassConfig;
 import br.com.marcosbassetto.model.bass.BassRhythmPattern;
+import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 
 import javax.swing.*;
 import java.awt.*;
 
 /**
- * Janela de configuração do baixo: preset rítmico, velocity, duração das notas
- * (legato vs staccato) e program change (timbre).
+ * Janela de configuração do baixo: preset rítmico, intensidade (baixa/média/
+ * forte), duração das notas (legato vs staccato) e program change (timbre).
  */
 public class BassConfigWindow extends JDialog {
 
@@ -17,7 +18,7 @@ public class BassConfigWindow extends JDialog {
     private final TimeSignatureInfo timeInfo;
 
     private final JComboBox<String> comboPreset;
-    private final JSlider sliderVelocity;
+    private final JComboBox<Intensity> comboIntensity;
     private final JSlider sliderDuration;
     private final JSpinner spinnerProgram;
 
@@ -31,12 +32,8 @@ public class BassConfigWindow extends JDialog {
         comboPreset = new JComboBox<>(BassRhythmPattern.ALL_PRESETS);
         comboPreset.setSelectedItem(config.getPattern().getAppliedPreset());
 
-        sliderVelocity = new JSlider(BassConfig.MIN_VELOCITY, BassConfig.MAX_VELOCITY,
-                config.getVelocity());
-        sliderVelocity.setMajorTickSpacing(20);
-        sliderVelocity.setMinorTickSpacing(5);
-        sliderVelocity.setPaintTicks(true);
-        sliderVelocity.setPaintLabels(true);
+        comboIntensity = new JComboBox<>(Intensity.values());
+        comboIntensity.setSelectedItem(config.getIntensity());
 
         sliderDuration = new JSlider(BassConfig.MIN_DURATION_PERCENT,
                 BassConfig.MAX_DURATION_PERCENT, config.getNoteDurationPercent());
@@ -82,10 +79,10 @@ public class BassConfigWindow extends JDialog {
         gbc.gridx = 0;
         gbc.gridy = 1;
         gbc.weightx = 0;
-        panel.add(new JLabel("Velocity:"), gbc);
+        panel.add(new JLabel("Intensidade:"), gbc);
         gbc.gridx = 1;
         gbc.weightx = 1;
-        panel.add(sliderVelocity, gbc);
+        panel.add(comboIntensity, gbc);
 
         gbc.gridx = 0;
         gbc.gridy = 2;
@@ -129,7 +126,7 @@ public class BassConfigWindow extends JDialog {
     }
 
     private void saveAndClose() {
-        config.setVelocity(sliderVelocity.getValue());
+        config.setIntensity((Intensity) comboIntensity.getSelectedItem());
         config.setNoteDurationPercent(sliderDuration.getValue());
         config.setProgramChange((int) spinnerProgram.getValue());
 

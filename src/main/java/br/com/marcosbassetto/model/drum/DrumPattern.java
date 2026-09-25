@@ -1,5 +1,6 @@
 package br.com.marcosbassetto.model.drum;
 
+import br.com.marcosbassetto.model.music.StylePreset;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 
 import java.util.EnumMap;
@@ -106,5 +107,96 @@ public class DrumPattern {
         for (int beat = 1; beat < beats; beat += 2) {
             setStep(DrumInstrument.SNARE, beat * stepsPerBeat, true);
         }
+    }
+
+    /**
+     * Aplica a levada do estilo. Cada estilo tem um desenho próprio, escrito
+     * RELATIVO ao compasso (nunca com posições fixas — isso estouraria a grade
+     * em 2/4, 3/4, 5/4 etc.).
+     */
+    public void applyStylePattern(String style, TimeSignatureInfo timeInfo) {
+        if (timeInfo == null) {
+            return;
+        }
+        StylePreset stylePreset = StylePreset.fromLabel(style);
+        clear();
+        switch (stylePreset != null ? stylePreset : StylePreset.ROCK) {
+            case BLUES -> applyBlues(timeInfo);
+            case BOSSA_NOVA -> applyBossaNova(timeInfo);
+            case JAZZ -> applyJazz(timeInfo);
+            case REGGAE -> applyReggae(timeInfo);
+            case ROCK -> applyRock(timeInfo);
+        }
+    }
+
+    private void applyStylePattern(StylePreset style, TimeSignatureInfo info) {
+        applyStylePattern(style.getLabel(), info);
+    }
+
+    /** Rock: chimbal em colcheias, bumbo nos tempos 1 e 3, caixa nos 2 e 4. */
+    private void applyRock(TimeSignatureInfo info) {
+        int spb = info.stepsPerBeat();
+        int beats = info.beatsPerMeasure();
+        for (int beat = 0; beat < beats; beat++) {
+            int beatStep = beat * spb;
+            setStep(DrumInstrument.HI_HAT_CLOSED, beatStep, true);
+            setStep(DrumInstrument.HI_HAT_CLOSED, beatStep + (spb / 2), true);
+            setStep(DrumInstrument.KICK, beatStep, true);
+            setStep(DrumInstrument.SNARE, beatStep + (spb / 2), true);
+        }
+    }
+
+    /** Blues: shuffle (tercina), condução no ride. */
+    private void applyBlues(TimeSignatureInfo info) {
+        int spb = info.stepsPerBeat();
+        int beats = info.beatsPerMeasure();
+        for (int beat = 0; beat < beats; beat++) {
+            int beatStep = beat * spb;
+            setStep(DrumInstrument.RIDE, beatStep, true);
+            setStep(DrumInstrument.RIDE, beatStep + (spb / 3), true);
+            setStep(DrumInstrument.RIDE, beatStep + ((2 * spb) / 3), true);
+            setStep(DrumInstrument.KICK, beatStep, true);
+            if (beat % 2 == 1) {
+                setStep(DrumInstrument.SNARE, beatStep, true);
+            }
+        }
+    }
+
+    /** Bossa Nova: surdo no 1 e no 3 (padrão 2–2 do partido alto). */
+    private void applyBossaNova(TimeSignatureInfo info) {
+        int spb = info.stepsPerBeat();
+        int beats = info.beatsPerMeasure();
+        for (int beat = 0; beat < beats; beat++) {
+            setStep(DrumInstrument.HI_HAT_CLOSED, beat * spb, true);
+        }
+        setStep(DrumInstrument.KICK, 0, true);
+        setStep(DrumInstrument.KICK, 2 * spb, true);
+    }
+
+    /** Jazz: ride com padrão de swing, bumbo e caixa apenas como acentos. */
+    private void applyJazz(TimeSignatureInfo info) {
+        int spb = info.stepsPerBeat();
+        int beats = info.beatsPerMeasure();
+        for (int beat = 0; beat < beats; beat++) {
+            int beatStep = beat * spb;
+            setStep(DrumInstrument.RIDE, beatStep, true);
+            setStep(DrumInstrument.RIDE, beatStep + (spb / 2), true);
+            setStep(DrumInstrument.HI_HAT_OPEN, beatStep + (spb / 4), true);
+            if (beat % 2 == 0) {
+                setStep(DrumInstrument.KICK, beatStep, true);
+            }
+        }
+    }
+
+    /** Reggae: one drop — bumbo e caixa juntos no tempo 3, chimbal no contratempo. */
+    private void applyReggae(TimeSignatureInfo info) {
+        int spb = info.stepsPerBeat();
+        int beats = info.beatsPerMeasure();
+        for (int beat = 0; beat < beats; beat++) {
+            setStep(DrumInstrument.HI_HAT_CLOSED, (beat * spb) + (spb / 2), true);
+        }
+        int drop = beats >= 3 ? 2 * spb : 0;
+        setStep(DrumInstrument.KICK, drop, true);
+        setStep(DrumInstrument.SNARE, drop, true);
     }
 }

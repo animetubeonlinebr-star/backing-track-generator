@@ -1,5 +1,6 @@
 package br.com.marcosbassetto.model.bass;
 
+import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import org.junit.jupiter.api.Test;
 
@@ -13,7 +14,8 @@ class BassConfigTest {
     @Test
     void defaultsAreSensible() {
         BassConfig config = new BassConfig(FOUR_FOUR);
-        assertEquals(90, config.getVelocity());
+        assertEquals(Intensity.MEDIA, config.getIntensity());
+        assertEquals(77, config.getVelocity(), "90 * 85%");
         assertEquals(80, config.getNoteDurationPercent());
         assertEquals(33, config.getProgramChange());
         assertEquals(16, config.getPattern().getTotalSteps());
@@ -27,12 +29,14 @@ class BassConfigTest {
     }
 
     @Test
-    void velocityIsClampedToRange() {
+    void intensityDrivesMeanVelocity() {
         BassConfig config = new BassConfig(FOUR_FOUR);
-        config.setVelocity(200);
-        assertEquals(BassConfig.MAX_VELOCITY, config.getVelocity());
-        config.setVelocity(10);
-        assertEquals(BassConfig.MIN_VELOCITY, config.getVelocity());
+
+        config.setIntensity(Intensity.BAIXA);
+        assertEquals(63, config.getVelocity(), "90 * 70%");
+
+        config.setIntensity(Intensity.FORTE);
+        assertEquals(90, config.getVelocity(), "90 * 100%");
     }
 
     @Test
