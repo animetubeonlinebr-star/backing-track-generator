@@ -204,6 +204,78 @@ class StylePresetTest {
                 "cada estilo deve produzir uma levada de bateria diferente");
     }
 
+    /**
+     * O requisito "para cada preset deve ser gerado um padrão diferente para
+     * cada instrumento": dentro de um mesmo estilo, os quatro padrões (bateria,
+     * baixo, guitarra, teclado) não podem coincidir entre si.
+     */
+    @Test
+    void everyInstrumentGetsItsOwnPatternWithinAStyle() {
+        for (StylePreset style : StylePreset.values()) {
+            TimeSignatureInfo info = TimeSignatureInfo.parse(style.getMeasure());
+
+            DrumConfig drums = new DrumConfig(info);
+            drums.applyStyle(style, info);
+            GuitarConfig guitar = new GuitarConfig();
+            guitar.applyStyle(style, info);
+            BassConfig bass = new BassConfig(info);
+            bass.applyStyle(style, info);
+            KeyboardConfig keyboard = new KeyboardConfig(info);
+            keyboard.applyStyle(style, info);
+
+            Set<String> patterns = new HashSet<>();
+            patterns.add(fingerprint(drums));
+            patterns.add(stepFingerprint(guitar.getPattern().getTotalSteps(),
+                    s -> guitar.getPattern().getAttack(s).name()));
+            patterns.add(stepFingerprint(bass.getPattern().getTotalSteps(),
+                    s -> bass.getPattern().getNoteType(s).name()));
+            patterns.add(stepFingerprint(keyboard.getPattern().getTotalSteps(),
+                    s -> keyboard.getPattern().getAttack(s).name()));
+
+            assertEquals(4, patterns.size(),
+                    style + ": dois instrumentos receberam o mesmo padrao");
+        }
+    }
+
+    /**
+     * E o requisito "cada preset gera um padrão diferente": para cada
+     * instrumento, os cinco estilos produzem cinco grades distintas. Compara-se
+     * no mesmo compasso (4/4) para que a diferença venha do estilo, não do
+     * tamanho da grade.
+     */
+    @Test
+    void eachStyleGivesEveryInstrumentADistinctPattern() {
+        TimeSignatureInfo fourFour = TimeSignatureInfo.parse("4/4");
+
+        Set<String> guitarPatterns = new HashSet<>();
+        Set<String> bassPatterns = new HashSet<>();
+        Set<String> keyboardPatterns = new HashSet<>();
+
+        for (StylePreset style : StylePreset.values()) {
+            GuitarConfig guitar = new GuitarConfig();
+            guitar.applyStyle(style, fourFour);
+            guitarPatterns.add(stepFingerprint(guitar.getPattern().getTotalSteps(),
+                    s -> guitar.getPattern().getAttack(s).name()));
+
+            BassConfig bass = new BassConfig(fourFour);
+            bass.applyStyle(style, fourFour);
+            bassPatterns.add(stepFingerprint(bass.getPattern().getTotalSteps(),
+                    s -> bass.getPattern().getNoteType(s).name()));
+
+            KeyboardConfig keyboard = new KeyboardConfig(fourFour);
+            keyboard.applyStyle(style, fourFour);
+            keyboardPatterns.add(stepFingerprint(keyboard.getPattern().getTotalSteps(),
+                    s -> keyboard.getPattern().getAttack(s).name()));
+        }
+
+        assertEquals(StylePreset.values().length, guitarPatterns.size(),
+                "guitarra: cada estilo precisa de um padrao proprio");
+        assertEquals(StylePreset.values().length, bassPatterns.size(),
+                "baixo: cada estilo precisa de um padrao proprio");
+        assertEquals(StylePreset.values().length, keyboardPatterns.size(),
+                "teclado: cada estilo precisa de um padrao proprio");
+    }
+
     @Test
     void applyingAStyleTwiceIsIdempotent() {
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
@@ -233,6 +305,15 @@ class StylePresetTest {
                 builder.append(drums.isHit(instrument, step) ? '1' : '0');
             }
             builder.append('|');
+        }
+        return builder.toString();
+    }
+
+    /** Grade de um padrão melódico/rítmico como texto, para comparar igualdade. */
+    private static String stepFingerprint(int totalSteps, java.util.function.IntFunction<String> at) {
+        StringBuilder builder = new StringBuilder();
+        for (int step = 0; step < totalSteps; step++) {
+            builder.append(at.apply(step)).append(',');
         }
         return builder.toString();
     }

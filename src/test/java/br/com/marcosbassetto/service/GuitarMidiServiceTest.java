@@ -187,7 +187,9 @@ class GuitarMidiServiceTest {
         config.getPattern().setAttack(0, GuitarRhythmPattern.AttackType.PICK);
 
         Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
-        new GuitarMidiService(config, timeInfo)
+        // Humanizador deterministico: com apenas 3 notas, um desvio aleatorio
+        // torna a checagem de media instavel.
+        new GuitarMidiService(config, timeInfo, new VelocityHumanizer(new Random(1), 0))
                 .generateGuitarTrack(sequence, track("C", "4/4"), 1920, PPQ);
         List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
 
@@ -197,7 +199,8 @@ class GuitarMidiServiceTest {
         assertEquals(0, ons.get(0).tick());
         assertEquals(subStep, ons.get(1).tick());
         assertEquals(subStep * 2, ons.get(2).tick());
-        assertTrue(Math.abs(meanVelocity(ons) - 75) <= 8);
+        assertTrue(Math.abs(meanVelocity(ons) - 75) <= 8,
+                "media perto de 75 na intensidade forte, foi " + meanVelocity(ons));
     }
 
     @Test
