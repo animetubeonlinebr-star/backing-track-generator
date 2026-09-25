@@ -4,6 +4,7 @@ import br.com.marcosbassetto.model.bass.BassConfig;
 import br.com.marcosbassetto.model.bass.BassRhythmPattern;
 import br.com.marcosbassetto.model.music.BackingTrack;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityHumanizer;
 
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MidiEvent;
@@ -19,13 +20,19 @@ import java.util.List;
  * a fundamental do acorde via {@link VoicingService#forBass} e dispara os graus
  * (fundamental, quinta, oitava) nos momentos definidos pelo
  * {@link BassRhythmPattern}.
+ *
+ * <p>A duração das notas acompanha o compasso: a nota cobre quase todo o passo,
+ * deixando apenas um pequeno silêncio de articulação. A velocity é humanizada
+ * em torno do nível escolhido, para a linha não soar mecânica.
  */
 public class BassMidiService {
 
     private static final int CHANNEL_BASS = 1;
     private static final int MIN_NOTE_TICKS = 1;
+    private static final long ARTICULATION_GAP_TICKS = 10;
 
     private final ChordService chordService = new ChordService();
+    private final VelocityHumanizer humanizer = new VelocityHumanizer();
     private final BassConfig config;
     private final TimeSignatureInfo timeInfo;
 
@@ -52,8 +59,7 @@ public class BassMidiService {
         String[] chords = backingTrack.getProgression().split("\\s*-\\s*");
         long measureTicks = timeInfo.getMeasureTicks(ppq);
         long stepTicks = timeInfo.getStepTicks(ppq);
-        long noteDuration = Math.max(MIN_NOTE_TICKS,
-                (stepTicks * config.getNoteDurationPercent()) / 100);
+        long noteDuration = Math.max(MIN_NOTE_TICKS, stepTicks - ARTICULATION_GAP_TICKS);
 
         BassRhythmPattern pattern = config.getPattern();
 
@@ -88,7 +94,7 @@ public class BassMidiService {
                 };
 
                 addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_BASS,
-                        note, config.getVelocity(), tick);
+                        note, humanizer.around(config.getVelocityLevel()), tick);
                 addNoteEvent(track, ShortMessage.NOTE_OFF, CHANNEL_BASS,
                         note, 0, tick + noteDuration);
             }

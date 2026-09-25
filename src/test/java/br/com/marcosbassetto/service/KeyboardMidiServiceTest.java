@@ -4,6 +4,7 @@ import br.com.marcosbassetto.model.keyboard.KeyboardConfig;
 import br.com.marcosbassetto.model.keyboard.KeyboardRhythmPattern;
 import br.com.marcosbassetto.model.music.BackingTrack;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityLevel;
 import org.junit.jupiter.api.Test;
 
 import javax.sound.midi.MidiEvent;
@@ -281,17 +282,28 @@ class KeyboardMidiServiceTest {
     }
 
     @Test
-    void velocityComesFromConfig() throws Exception {
+    void velocitiesAreHumanizedAroundTheChosenLevel() throws Exception {
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
         KeyboardConfig config = new KeyboardConfig(timeInfo);
-        config.setVelocity(55);
+        config.setVelocityLevel(VelocityLevel.ALTO);
 
         Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
         new KeyboardMidiService(config, timeInfo)
-                .generateKeyboardTrack(sequence, chord("C", "4/4"), 1920, PPQ);
+                .generateKeyboardTrack(sequence, chord("C - Am - Dm - G", "4/4"), 7680, PPQ);
+        List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
 
-        assertTrue(noteOns(sequence.getTracks()[0]).stream()
-                .allMatch(n -> n.velocity() == 55));
+        assertFalse(ons.isEmpty());
+        int average = VelocityLevel.ALTO.getAverage();
+        int range = average / 3;
+        for (NoteOn note : ons) {
+            assertTrue(note.velocity() >= 1 && note.velocity() <= 127,
+                    "velocity fora da faixa MIDI: " + note.velocity());
+            assertTrue(Math.abs(note.velocity() - average) <= range,
+                    "velocity " + note.velocity() + " longe da media " + average);
+        }
+        double mean = ons.stream().mapToInt(NoteOn::velocity).average().orElse(0);
+        assertTrue(Math.abs(mean - average) <= range,
+                "media das velocities (" + mean + ") deve ficar proxima de " + average);
     }
 
     @Test

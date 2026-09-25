@@ -4,6 +4,7 @@ import br.com.marcosbassetto.model.bass.BassConfig;
 import br.com.marcosbassetto.model.bass.BassRhythmPattern;
 import br.com.marcosbassetto.model.music.BackingTrack;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityLevel;
 import org.junit.jupiter.api.Test;
 
 import javax.sound.midi.MidiEvent;
@@ -151,11 +152,9 @@ class BassMidiServiceTest {
     }
 
     @Test
-    void velocityAndDurationComeFromConfig() throws Exception {
+    void noteDurationFollowsTheStepAndLeavesAnArticulationGap() throws Exception {
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
         BassConfig config = new BassConfig(timeInfo);
-        config.setVelocity(100);
-        config.setNoteDurationPercent(50);
 
         Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
         new BassMidiService(config, timeInfo)
@@ -163,10 +162,7 @@ class BassMidiServiceTest {
         Track t = sequence.getTracks()[0];
 
         long stepTicks = timeInfo.getStepTicks(PPQ);
-        long expectedDuration = (stepTicks * 50) / 100;
-
         NoteOn first = noteOns(t).get(0);
-        assertEquals(100, first.velocity());
         long noteOffTick = -1;
         for (int i = 0; i < t.size(); i++) {
             if (t.get(i).getMessage() instanceof ShortMessage sm
@@ -175,7 +171,41 @@ class BassMidiServiceTest {
                 break;
             }
         }
-        assertEquals(first.tick() + expectedDuration, noteOffTick);
+        assertTrue(noteOffTick > first.tick(), "a nota precisa ter duracao positiva");
+        assertTrue(noteOffTick < first.tick() + stepTicks,
+                "deve sobrar um silencio de articulacao antes do proximo passo");
+        assertTrue(noteOffTick > first.tick() + stepTicks / 2,
+                "a nota deve cobrir a maior parte do passo");
+    }
+
+    /**
+     * Velocity fixa soa mecanica. A humanizacao sorteia em torno da media do
+     * nivel escolhido, sem nunca estourar a faixa MIDI nem sair do nivel.
+     */
+    @Test
+    void velocitiesAreHumanizedAroundTheChosenLevel() throws Exception {
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
+        BassConfig config = new BassConfig(timeInfo);
+        config.applyPreset(BassRhythmPattern.PRESET_CAMINHANTE, timeInfo);
+        config.setVelocityLevel(VelocityLevel.ALTO);
+
+        Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
+        new BassMidiService(config, timeInfo)
+                .generateBassTrack(sequence, track("C - Am - Dm - G", "4/4"), 7680, PPQ);
+        List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
+
+        assertFalse(ons.isEmpty());
+        int average = VelocityLevel.ALTO.getAverage();
+        int range = average / 3;
+        for (NoteOn note : ons) {
+            assertTrue(note.velocity() >= 1 && note.velocity() <= 127,
+                    "velocity fora da faixa MIDI: " + note.velocity());
+            assertTrue(Math.abs(note.velocity() - average) <= range,
+                    "velocity " + note.velocity() + " longe da media " + average);
+        }
+        double mean = ons.stream().mapToInt(NoteOn::velocity).average().orElse(0);
+        assertTrue(Math.abs(mean - average) <= range,
+                "media das velocities (" + mean + ") deve ficar proxima de " + average);
     }
 
     @Test

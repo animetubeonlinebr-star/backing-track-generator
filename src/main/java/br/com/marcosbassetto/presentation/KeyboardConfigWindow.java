@@ -3,13 +3,15 @@ package br.com.marcosbassetto.presentation;
 import br.com.marcosbassetto.model.keyboard.KeyboardConfig;
 import br.com.marcosbassetto.model.keyboard.KeyboardRhythmPattern;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityLevel;
 
 import javax.swing.*;
 import java.awt.*;
 
 /**
- * Janela de configuração do teclado: preset rítmico, timbre, velocity,
- * duração das notas e pedal de sustain.
+ * Janela de configuração do teclado: preset rítmico, timbre, intensidade
+ * (fraco/médio/alto) e pedal de sustain. A duração das notas é derivada do
+ * compasso e do BPM do formulário principal, por isso não aparece aqui.
  */
 public class KeyboardConfigWindow extends JDialog {
 
@@ -38,8 +40,7 @@ public class KeyboardConfigWindow extends JDialog {
 
     private final JComboBox<String> comboPreset;
     private final JComboBox<String> comboProgram;
-    private final JSlider sliderVelocity;
-    private final JSlider sliderDuration;
+    private final JComboBox<VelocityLevel> comboVelocity;
     private final JCheckBox chkSustain;
 
     private boolean saved = false;
@@ -55,19 +56,8 @@ public class KeyboardConfigWindow extends JDialog {
         comboProgram = new JComboBox<>(PROGRAM_NAMES);
         comboProgram.setSelectedIndex(findProgramIndex(config.getProgramChange()));
 
-        sliderVelocity = new JSlider(KeyboardConfig.MIN_VELOCITY,
-                KeyboardConfig.MAX_VELOCITY, config.getVelocity());
-        sliderVelocity.setMajorTickSpacing(20);
-        sliderVelocity.setMinorTickSpacing(5);
-        sliderVelocity.setPaintTicks(true);
-        sliderVelocity.setPaintLabels(true);
-
-        sliderDuration = new JSlider(KeyboardConfig.MIN_DURATION_PERCENT,
-                KeyboardConfig.MAX_DURATION_PERCENT, config.getNoteDurationPercent());
-        sliderDuration.setMajorTickSpacing(10);
-        sliderDuration.setMinorTickSpacing(5);
-        sliderDuration.setPaintTicks(true);
-        sliderDuration.setPaintLabels(true);
+        comboVelocity = new JComboBox<>(VelocityLevel.values());
+        comboVelocity.setSelectedItem(config.getVelocityLevel());
 
         chkSustain = new JCheckBox("Usar pedal de sustain (CC 64)", config.isSustainEnabled());
 
@@ -76,7 +66,7 @@ public class KeyboardConfigWindow extends JDialog {
         add(buildButtonsPanel(), BorderLayout.SOUTH);
 
         pack();
-        setMinimumSize(new Dimension(480, 360));
+        setMinimumSize(new Dimension(480, 320));
         setResizable(false);
         setLocationRelativeTo(owner);
     }
@@ -116,18 +106,10 @@ public class KeyboardConfigWindow extends JDialog {
         panel.add(new JLabel("Velocity:"), gbc);
         gbc.gridx = 1;
         gbc.weightx = 1;
-        panel.add(sliderVelocity, gbc);
+        panel.add(comboVelocity, gbc);
 
         gbc.gridx = 0;
         gbc.gridy = 3;
-        gbc.weightx = 0;
-        panel.add(new JLabel("Duração (% do compasso):"), gbc);
-        gbc.gridx = 1;
-        gbc.weightx = 1;
-        panel.add(sliderDuration, gbc);
-
-        gbc.gridx = 0;
-        gbc.gridy = 4;
         gbc.gridwidth = 2;
         panel.add(chkSustain, gbc);
 
@@ -169,8 +151,7 @@ public class KeyboardConfigWindow extends JDialog {
     }
 
     private void saveAndClose() {
-        config.setVelocity(sliderVelocity.getValue());
-        config.setNoteDurationPercent(sliderDuration.getValue());
+        config.setVelocityLevel((VelocityLevel) comboVelocity.getSelectedItem());
         config.setSustainEnabled(chkSustain.isSelected());
         config.setProgramChange(extractProgram((String) comboProgram.getSelectedItem()));
 

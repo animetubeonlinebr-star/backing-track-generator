@@ -1,6 +1,7 @@
 package br.com.marcosbassetto.model.guitar;
 
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityLevel;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,17 +74,35 @@ class GuitarConfigTest {
     @Test
     void velocitiesAndProgramAreClamped() {
         GuitarConfig config = new GuitarConfig();
-        config.setVelocityDown(200);
-        config.setVelocityUp(-10);
-        config.setVelocityPick(999);
+        config.setVelocityDownLevel(VelocityLevel.ALTO);
+        config.setVelocityUpLevel(null);
+        config.setVelocityPickLevel(VelocityLevel.FRACO);
         config.setProgramChange(200);
         config.setStrumOffsetTicks(-5);
 
-        assertEquals(127, config.getVelocityDown());
-        assertEquals(0, config.getVelocityUp());
-        assertEquals(127, config.getVelocityPick());
+        assertEquals(VelocityLevel.ALTO, config.getVelocityDownLevel());
+        assertEquals(VelocityLevel.FRACO, config.getVelocityUpLevel(), "nulo e ignorado");
+        assertEquals(VelocityLevel.FRACO, config.getVelocityPickLevel());
         assertEquals(127, config.getProgramChange());
         assertEquals(0, config.getStrumOffsetTicks());
+    }
+
+    @Test
+    void articulationDefaultsToBatidaAndIgnoresNulls() {
+        GuitarConfig config = new GuitarConfig();
+        assertEquals(GuitarArticulation.BATIDA, config.getArticulation());
+        config.setArticulation(GuitarArticulation.DEDILHADO);
+        assertEquals(GuitarArticulation.DEDILHADO, config.getArticulation());
+        config.setArticulation(null);
+        assertEquals(GuitarArticulation.DEDILHADO, config.getArticulation());
+    }
+
+    @Test
+    void articulationIsParsedFromItsLabel() {
+        assertEquals(GuitarArticulation.DEDILHADO, GuitarArticulation.fromLabel("dedilhado"));
+        assertEquals(GuitarArticulation.BATIDA, GuitarArticulation.fromLabel("Batida"));
+        assertEquals(GuitarArticulation.BATIDA, GuitarArticulation.fromLabel("inexistente"));
+        assertEquals(GuitarArticulation.BATIDA, GuitarArticulation.fromLabel(null));
     }
 
     @Test

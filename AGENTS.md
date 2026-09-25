@@ -22,9 +22,10 @@ Layers under `src/main/java/br/com/marcosbassetto`:
 - `service` — MIDI generation. `MidiGenerationService` orchestrates: builds the `Sequence` (PPQ 480), tempo/time-signature meta events, harmony track, and delegates to `DrumMidiService` / `GuitarMidiService`. `ChordService` parses chord symbols to MIDI notes (root, slash bass, extensions; falls back to C major on invalid input). `VoicingService` maps raw chord notes to instrument registers with voice leading.
 - `model.music` — `BackingTrack` (DTO, all fields `String`), `TimeSignatureInfo` (record; validates `N/D`, computes beats/steps/ticks, detects compound meters).
 - `model.drum` — `DrumConfig`, `DrumPattern` (boolean grid), `DrumInstrument` (enum with default MIDI notes).
-- `model.guitar` — `GuitarConfig` (pattern + strum offset + velocities + program), `GuitarRhythmPattern` (per-step `AttackType` grid with presets).
-- `model.bass` — `BassConfig` (preset + velocity + note duration + program), `BassRhythmPattern` (per-step `BassNoteType` grid with presets).
-- `model.keyboard` — `KeyboardConfig` (preset + velocity + program + duration + sustain), `KeyboardRhythmPattern` (per-step `AttackType` grid with presets).
+- `model.guitar` — `GuitarConfig` (pattern + strum offset + articulation + velocity levels + program), `GuitarRhythmPattern` (per-step `AttackType` grid with presets), `GuitarArticulation` (`BATIDA`/`DEDILHADO`).
+- `model.bass` — `BassConfig` (preset + velocity level + program), `BassRhythmPattern` (per-step `BassNoteType` grid with presets).
+- `model.keyboard` — `KeyboardConfig` (preset + velocity level + program + sustain), `KeyboardRhythmPattern` (per-step `AttackType` grid with presets).
+- `model.performance` — `VelocityLevel` (`FRACO`/`MEDIO`/`ALTO`, each with an average) and `VelocityHumanizer` (random velocity around an average, in steps of 5, clamped to 1–127).
 
 ## Rhythm as a pattern (not per-note expression)
 For backing tracks each instrument is defined by WHEN and WHAT it plays, not HOW each note is expressed. There is deliberately no pitch bend / vibrato / slide / slap.
@@ -36,9 +37,14 @@ For backing tracks each instrument is defined by WHEN and WHAT it plays, not HOW
 
 ## Sustained vs. articulated notes
 The keyboard's identity is that it can hold a chord. Two rules make that work:
-- A BLOCK note is held until the **next attack** (or the measure end), scaled by `noteDurationPercent` — not for one step. Holding a pad for a single 16th step turns it into a blip, and the bug hides whenever the sustain pedal is on.
+- A BLOCK note is held until the **next attack** (or the measure end) — not for one step. Holding a pad for a single 16th step turns it into a blip, and the bug hides whenever the sustain pedal is on. The hold is scaled by a fixed `SUSTAINED_DURATION_PERCENT` (95%), because the duration is no longer user-editable.
 - The sustain pedal (CC 64) is per measure: on at the downbeat, off near the measure end. The release is always emitted, including in a partial final measure, otherwise the pedal stays stuck on.
 - Arpeggio sub-notes must be bounded by `totalTicks` — the loop gate only checks the arpeggio's first note, so later notes can otherwise land past the end of the piece.
+
+## Duration and velocity (automatic)
+Note duration is no longer a UI setting. The bass derives it from the meter (`stepTicks - ARTICULATION_GAP_TICKS`, i.e. almost a full step) and the keyboard from the span until the next attack, so the note lengths follow BPM/meter from the main form and the MIDI length comes from the min/seg duration there.
+- Velocity is chosen as a `VelocityLevel` (`FRACO`/`MEDIO`/`ALTO`) and then humanized per note by `VelocityHumanizer`: a random offset in steps of 5 around the level's average, amplitude ±average/3, clamped to 1–127. A fixed velocity sounds mechanical; the sample mean still tracks the chosen level, which is the property the tests assert.
+- `GuitarConfig` has three levels (down/up/pick) plus a `GuitarArticulation`. The service only reads the level matching the articulation in effect: `BATIDA` uses down/up and `DEDILHADO` uses pick. `GuitarMidiService.effectiveAttack` rewrites the preset's attacks to match the chosen articulation (picks become down-strums in `BATIDA`, strums become picks in `DEDILHADO`), because the rhythm presets mix both textures and would otherwise reintroduce the disabled one.
 
 ## Registers and voice leading
 `VoicingService` does NOT transpose each note until it "fits" — that destroys the voicing. It rebuilds the chord inside the instrument region, choosing the inversion with least movement from the previous voicing.
@@ -58,7 +64,8 @@ The keyboard's identity is that it can hold a chord. Two rules make that work:
 
 ## Conventions & gotchas
 - `MidiGenerationService.createSequence()` is public and side-effect free — use it for tests; `generate()` opens a `JFileChooser` and is interactive.
-- MIDI velocity/note values must be 0–127 or `ShortMessage` throws; clamp in config setters.
+- MIDI velocity/note values must be 0–127 or `ShortMessage` throws; clamp in config setters. `VelocityHumanizer` clamps too, since the offsets are computed from the average.
+- The UI combo boxes hold `VelocityLevel`/`GuitarArticulation` values directly, so `toString()` returns the Portuguese label shown to the user; `fromLabel` accepts either the label or the enum name for parsing.
 - `GuitarConfig.syncPatternTo` tracks the applied preset/size, not just the size, because the default is 16 steps which equals 4/4 — a size-only check silently skips applying the preset.
 - `BassConfig.applyPreset` sets the preset before syncing, otherwise a simultaneous meter change re-applies the OLD preset via `resizeSteps(..., reapplyPreset=true)`.
 - Preset-based grids ignore out-of-range steps and constructors fill with NONE, never `null`.

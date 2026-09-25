@@ -1,6 +1,7 @@
 package br.com.marcosbassetto.model.bass;
 
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityLevel;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -13,8 +14,7 @@ class BassConfigTest {
     @Test
     void defaultsAreSensible() {
         BassConfig config = new BassConfig(FOUR_FOUR);
-        assertEquals(90, config.getVelocity());
-        assertEquals(80, config.getNoteDurationPercent());
+        assertEquals(VelocityLevel.MEDIO, config.getVelocityLevel());
         assertEquals(33, config.getProgramChange());
         assertEquals(16, config.getPattern().getTotalSteps());
         assertEquals(BassRhythmPattern.PRESET_FUNDAMENTAL_SIMPLES, config.getPreset());
@@ -27,21 +27,17 @@ class BassConfigTest {
     }
 
     @Test
-    void velocityIsClampedToRange() {
+    void velocityLevelChanges() {
         BassConfig config = new BassConfig(FOUR_FOUR);
-        config.setVelocity(200);
-        assertEquals(BassConfig.MAX_VELOCITY, config.getVelocity());
-        config.setVelocity(10);
-        assertEquals(BassConfig.MIN_VELOCITY, config.getVelocity());
+        config.setVelocityLevel(VelocityLevel.ALTO);
+        assertEquals(VelocityLevel.ALTO, config.getVelocityLevel());
     }
 
     @Test
-    void durationIsClampedToRange() {
+    void nullVelocityLevelIsIgnored() {
         BassConfig config = new BassConfig(FOUR_FOUR);
-        config.setNoteDurationPercent(200);
-        assertEquals(BassConfig.MAX_DURATION_PERCENT, config.getNoteDurationPercent());
-        config.setNoteDurationPercent(5);
-        assertEquals(BassConfig.MIN_DURATION_PERCENT, config.getNoteDurationPercent());
+        config.setVelocityLevel(null);
+        assertEquals(VelocityLevel.MEDIO, config.getVelocityLevel());
     }
 
     @Test

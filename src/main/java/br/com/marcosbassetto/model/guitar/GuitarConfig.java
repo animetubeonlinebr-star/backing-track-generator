@@ -1,11 +1,17 @@
 package br.com.marcosbassetto.model.guitar;
 
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityLevel;
 
 /**
- * Ajustes da guitarra rítmica: qual padrão de ataques usar e os parâmetros de
- * execução (offset da palhetada, velocities, timbre). É a fonte única dos
- * valores editáveis pela UI, para que o serviço de MIDI não os tenha fixos.
+ * Ajustes da guitarra rítmica: qual padrão de ataques usar, a articulação
+ * (batida, dedilhado ou os dois) e os parâmetros de execução (offset da
+ * palhetada, intensidades, timbre). É a fonte única dos valores editáveis pela
+ * UI, para que o serviço de MIDI não os tenha fixos.
+ *
+ * <p>As intensidades são escolhidas por nível (fraco/médio/alto) e humanizadas
+ * na geração. O serviço só consulta a intensidade correspondente à articulação
+ * encontrada: uma batida ignora a intensidade do dedilhado e vice-versa.
  */
 public class GuitarConfig {
 
@@ -14,9 +20,10 @@ public class GuitarConfig {
     private String appliedPreset = null;
     private int appliedSteps = -1;
     private int strumOffsetTicks = 15;
-    private int velocityDown = 80;
-    private int velocityUp = 65;
-    private int velocityPick = 75;
+    private GuitarArticulation articulation = GuitarArticulation.BATIDA;
+    private VelocityLevel velocityDownLevel = VelocityLevel.MEDIO;
+    private VelocityLevel velocityUpLevel = VelocityLevel.FRACO;
+    private VelocityLevel velocityPickLevel = VelocityLevel.MEDIO;
     private int programChange = 25; // Acoustic Guitar (nylon)
 
     public GuitarRhythmPattern getPattern() {
@@ -74,28 +81,44 @@ public class GuitarConfig {
         this.strumOffsetTicks = Math.max(0, strumOffsetTicks);
     }
 
-    public int getVelocityDown() {
-        return velocityDown;
+    public GuitarArticulation getArticulation() {
+        return articulation;
     }
 
-    public void setVelocityDown(int velocityDown) {
-        this.velocityDown = clampVelocity(velocityDown);
+    public void setArticulation(GuitarArticulation articulation) {
+        if (articulation != null) {
+            this.articulation = articulation;
+        }
     }
 
-    public int getVelocityUp() {
-        return velocityUp;
+    public VelocityLevel getVelocityDownLevel() {
+        return velocityDownLevel;
     }
 
-    public void setVelocityUp(int velocityUp) {
-        this.velocityUp = clampVelocity(velocityUp);
+    public void setVelocityDownLevel(VelocityLevel level) {
+        if (level != null) {
+            this.velocityDownLevel = level;
+        }
     }
 
-    public int getVelocityPick() {
-        return velocityPick;
+    public VelocityLevel getVelocityUpLevel() {
+        return velocityUpLevel;
     }
 
-    public void setVelocityPick(int velocityPick) {
-        this.velocityPick = clampVelocity(velocityPick);
+    public void setVelocityUpLevel(VelocityLevel level) {
+        if (level != null) {
+            this.velocityUpLevel = level;
+        }
+    }
+
+    public VelocityLevel getVelocityPickLevel() {
+        return velocityPickLevel;
+    }
+
+    public void setVelocityPickLevel(VelocityLevel level) {
+        if (level != null) {
+            this.velocityPickLevel = level;
+        }
     }
 
     public int getProgramChange() {
@@ -104,9 +127,5 @@ public class GuitarConfig {
 
     public void setProgramChange(int programChange) {
         this.programChange = Math.max(0, Math.min(127, programChange));
-    }
-
-    private static int clampVelocity(int velocity) {
-        return Math.max(0, Math.min(127, velocity));
     }
 }

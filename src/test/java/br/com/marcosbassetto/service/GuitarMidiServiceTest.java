@@ -1,9 +1,11 @@
 package br.com.marcosbassetto.service;
 
+import br.com.marcosbassetto.model.guitar.GuitarArticulation;
 import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.guitar.GuitarRhythmPattern;
 import br.com.marcosbassetto.model.music.BackingTrack;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityLevel;
 import org.junit.jupiter.api.Test;
 
 import javax.sound.midi.MidiEvent;
@@ -113,7 +115,7 @@ class GuitarMidiServiceTest {
         assertEquals(30, ons.get(2).tick());
         assertTrue(ons.get(0).note() < ons.get(1).note(), "down comeca pelo grave");
         assertTrue(ons.get(1).note() < ons.get(2).note());
-        ons.forEach(n -> assertEquals(80, n.velocity(), "down e mais forte"));
+        assertVelocityNear(ons, VelocityLevel.MEDIO, "down");
     }
 
     @Test
@@ -129,13 +131,16 @@ class GuitarMidiServiceTest {
 
         assertEquals(3, ons.size());
         assertTrue(ons.get(0).note() > ons.get(1).note(), "up comeca pelo agudo");
-        ons.forEach(n -> assertEquals(65, n.velocity(), "up e mais suave"));
+        assertVelocityNear(ons, VelocityLevel.FRACO, "up");
+        assertTrue(VelocityLevel.FRACO.getAverage() < VelocityLevel.MEDIO.getAverage(),
+                "up e mais suave que down");
     }
 
     @Test
     void pickPlaysNotesSequentiallyWithinTheStep() throws Exception {
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
         GuitarConfig config = new GuitarConfig();
+        config.setArticulation(GuitarArticulation.DEDILHADO);
         config.getPattern().setAttack(0, GuitarRhythmPattern.AttackType.PICK);
 
         Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
@@ -149,7 +154,79 @@ class GuitarMidiServiceTest {
         assertEquals(0, ons.get(0).tick());
         assertEquals(subStep, ons.get(1).tick());
         assertEquals(subStep * 2, ons.get(2).tick());
-        ons.forEach(n -> assertEquals(75, n.velocity()));
+        assertVelocityNear(ons, VelocityLevel.MEDIO, "dedilhado");
+    }
+
+    /** A humanizacao varia em torno da media do nivel, sem sair dele. */
+    private static void assertVelocityNear(List<NoteOn> ons, VelocityLevel level, String label) {
+        int average = level.getAverage();
+        int range = average / 3;
+        for (NoteOn note : ons) {
+            assertTrue(note.velocity() >= 1 && note.velocity() <= 127,
+                    label + ": velocity fora da faixa MIDI: " + note.velocity());
+            assertTrue(Math.abs(note.velocity() - average) <= range,
+                    label + ": velocity " + note.velocity() + " longe da media " + average);
+        }
+    }
+
+    @Test
+    void dedilhadoArticulationTurnsStrumAttacksIntoPicks() throws Exception {
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
+        GuitarConfig config = new GuitarConfig();
+        config.setArticulation(GuitarArticulation.DEDILHADO);
+        config.getPattern().setAttack(0, GuitarRhythmPattern.AttackType.STRUM_DOWN);
+
+        Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
+        new GuitarMidiService(config, timeInfo)
+                .generateGuitarTrack(sequence, track("C", "4/4"), 1920, PPQ);
+        List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
+
+        assertEquals(3, ons.size());
+        long stepTicks = timeInfo.getStepTicks(PPQ);
+        assertEquals(stepTicks / 3, ons.get(1).tick(), "deve tocar como dedilhado, nao como acorde");
+        assertVelocityNear(ons, VelocityLevel.MEDIO, "dedilhado");
+    }
+
+    @Test
+    void batidaArticulationTurnsPickAttacksIntoDownStrums() throws Exception {
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
+        GuitarConfig config = new GuitarConfig();
+        config.setArticulation(GuitarArticulation.BATIDA);
+        config.getPattern().setAttack(0, GuitarRhythmPattern.AttackType.PICK);
+
+        Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
+        new GuitarMidiService(config, timeInfo)
+                .generateGuitarTrack(sequence, track("C", "4/4"), 1920, PPQ);
+        List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
+
+        assertEquals(3, ons.size());
+        assertEquals(0, ons.get(0).tick());
+        assertEquals(15, ons.get(1).tick(), "deve tocar como batida para baixo");
+        assertEquals(30, ons.get(2).tick());
+        assertVelocityNear(ons, VelocityLevel.MEDIO, "batida");
+    }
+
+    @Test
+    void batidaArticulationConvertsEveryAttackIntoAStrum() throws Exception {
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
+        GuitarConfig config = new GuitarConfig();
+        config.setArticulation(GuitarArticulation.BATIDA);
+        config.getPattern().setAttack(0, GuitarRhythmPattern.AttackType.PICK);
+        config.getPattern().setAttack(2, GuitarRhythmPattern.AttackType.PICK);
+
+        Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
+        new GuitarMidiService(config, timeInfo)
+                .generateGuitarTrack(sequence, track("C", "4/4"), 1920, PPQ);
+        List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
+
+        long stepTicks = timeInfo.getStepTicks(PPQ);
+        long secondAttackTick = 2 * stepTicks;
+        assertTrue(ons.stream().anyMatch(n -> n.tick() == 0), "primeiro ataque no passo 0");
+        assertTrue(ons.stream().anyMatch(n -> n.tick() == 15),
+                "batida espalha as notas com o offset da palhetada");
+        assertTrue(ons.stream().anyMatch(n -> n.tick() == secondAttackTick),
+                "segundo ataque no passo 2");
+        assertVelocityNear(ons, VelocityLevel.MEDIO, "batida");
     }
 
     @Test

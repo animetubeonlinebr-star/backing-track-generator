@@ -1,16 +1,20 @@
 package br.com.marcosbassetto.presentation;
 
+import br.com.marcosbassetto.model.guitar.GuitarArticulation;
 import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.guitar.GuitarRhythmPattern;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityLevel;
 
 import javax.swing.*;
 import java.awt.*;
 
 /**
- * Janela de configuração da guitarra rítmica: escolha do preset de ataques e
- * ajuste fino dos parâmetros de execução (offset da palhetada, velocities e
- * timbre). As alterações só são aplicadas ao confirmar.
+ * Janela de configuração da guitarra rítmica: escolha do preset de ataques,
+ * articulação (batida, dedilhado ou os dois) e ajuste fino dos parâmetros de
+ * execução (offset da palhetada, intensidades e timbre). A articulação habilita
+ * apenas os controles de intensidade que serão usados. As alterações só são
+ * aplicadas ao confirmar.
  */
 public class GuitarConfigWindow extends JDialog {
 
@@ -27,10 +31,15 @@ public class GuitarConfigWindow extends JDialog {
     private final Runnable onSaveCallback;
 
     private final JComboBox<String> cmbPreset = new JComboBox<>(PRESETS);
+    private final JComboBox<GuitarArticulation> cmbArticulation =
+            new JComboBox<>(GuitarArticulation.values());
     private final JSpinner spnStrumOffset = new JSpinner(new SpinnerNumberModel(15, 0, 60, 1));
-    private final JSpinner spnVelocityDown = new JSpinner(new SpinnerNumberModel(80, 0, 127, 1));
-    private final JSpinner spnVelocityUp = new JSpinner(new SpinnerNumberModel(65, 0, 127, 1));
-    private final JSpinner spnVelocityPick = new JSpinner(new SpinnerNumberModel(75, 0, 127, 1));
+    private final JComboBox<VelocityLevel> cmbVelocityDown =
+            new JComboBox<>(VelocityLevel.values());
+    private final JComboBox<VelocityLevel> cmbVelocityUp =
+            new JComboBox<>(VelocityLevel.values());
+    private final JComboBox<VelocityLevel> cmbVelocityPick =
+            new JComboBox<>(VelocityLevel.values());
     private final JSpinner spnProgram = new JSpinner(new SpinnerNumberModel(25, 0, 127, 1));
 
     public GuitarConfigWindow(Window owner, GuitarConfig config, TimeSignatureInfo timeInfo,
@@ -41,7 +50,7 @@ public class GuitarConfigWindow extends JDialog {
         this.onSaveCallback = onSaveCallback;
 
         setLayout(new BorderLayout(10, 10));
-        setSize(420, 320);
+        setSize(440, 360);
         setResizable(false);
         setLocationRelativeTo(owner);
 
@@ -50,14 +59,16 @@ public class GuitarConfigWindow extends JDialog {
 
         fields.add(new JLabel("Padrão rítmico"));
         fields.add(cmbPreset);
+        fields.add(new JLabel("Articulação"));
+        fields.add(cmbArticulation);
         fields.add(new JLabel("Offset da palhetada (ticks)"));
         fields.add(spnStrumOffset);
         fields.add(new JLabel("Velocity ↓ (batida para baixo)"));
-        fields.add(spnVelocityDown);
+        fields.add(cmbVelocityDown);
         fields.add(new JLabel("Velocity ↑ (batida para cima)"));
-        fields.add(spnVelocityUp);
+        fields.add(cmbVelocityUp);
         fields.add(new JLabel("Velocity do dedilhado"));
-        fields.add(spnVelocityPick);
+        fields.add(cmbVelocityPick);
         fields.add(new JLabel("Program Change (timbre)"));
         fields.add(spnProgram);
 
@@ -74,25 +85,41 @@ public class GuitarConfigWindow extends JDialog {
         add(fields, BorderLayout.CENTER);
         add(buttons, BorderLayout.SOUTH);
 
+        cmbArticulation.addActionListener(_ -> applyArticulationEnabledState());
         loadFromConfig();
     }
 
     private void loadFromConfig() {
         cmbPreset.setSelectedItem(config.getPreset());
+        cmbArticulation.setSelectedItem(config.getArticulation());
         spnStrumOffset.setValue(config.getStrumOffsetTicks());
-        spnVelocityDown.setValue(config.getVelocityDown());
-        spnVelocityUp.setValue(config.getVelocityUp());
-        spnVelocityPick.setValue(config.getVelocityPick());
+        cmbVelocityDown.setSelectedItem(config.getVelocityDownLevel());
+        cmbVelocityUp.setSelectedItem(config.getVelocityUpLevel());
+        cmbVelocityPick.setSelectedItem(config.getVelocityPickLevel());
         spnProgram.setValue(config.getProgramChange());
+        applyArticulationEnabledState();
+    }
+
+    /** Batida habilita as palhetadas; dedilhado habilita só a velocity do dedilhado. */
+    private void applyArticulationEnabledState() {
+        GuitarArticulation articulation =
+                (GuitarArticulation) cmbArticulation.getSelectedItem();
+        boolean strum = articulation != GuitarArticulation.DEDILHADO;
+        boolean pick = articulation == GuitarArticulation.DEDILHADO;
+
+        cmbVelocityDown.setEnabled(strum);
+        cmbVelocityUp.setEnabled(strum);
+        cmbVelocityPick.setEnabled(pick);
     }
 
     private void saveAndClose() {
         String preset = (String) cmbPreset.getSelectedItem();
         config.setPreset(preset);
+        config.setArticulation((GuitarArticulation) cmbArticulation.getSelectedItem());
         config.setStrumOffsetTicks((int) spnStrumOffset.getValue());
-        config.setVelocityDown((int) spnVelocityDown.getValue());
-        config.setVelocityUp((int) spnVelocityUp.getValue());
-        config.setVelocityPick((int) spnVelocityPick.getValue());
+        config.setVelocityDownLevel((VelocityLevel) cmbVelocityDown.getSelectedItem());
+        config.setVelocityUpLevel((VelocityLevel) cmbVelocityUp.getSelectedItem());
+        config.setVelocityPickLevel((VelocityLevel) cmbVelocityPick.getSelectedItem());
         config.setProgramChange((int) spnProgram.getValue());
 
         if (timeInfo != null) {

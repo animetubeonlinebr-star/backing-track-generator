@@ -5,6 +5,7 @@ import br.com.marcosbassetto.model.keyboard.KeyboardRhythmPattern;
 import br.com.marcosbassetto.model.keyboard.KeyboardRhythmPattern.AttackType;
 import br.com.marcosbassetto.model.music.BackingTrack;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityHumanizer;
 
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MidiEvent;
@@ -21,6 +22,10 @@ import java.util.List;
  * <p>O teclado é o irmão harmônico da guitarra: usa o mesmo voice leading do
  * {@link VoicingService}, mas toca acordes em bloco ou arpejos e pode sustentar
  * com o pedal (CC 64).
+ *
+ * <p>A duração das notas acompanha o compasso: um pad é segurado até o próximo
+ * ataque (ou o fim do compasso) com um pequeno silêncio de articulação. A
+ * velocity é humanizada em torno do nível escolhido.
  */
 public class KeyboardMidiService {
 
@@ -30,8 +35,10 @@ public class KeyboardMidiService {
     private static final int SUSTAIN_OFF = 0;
     private static final int SUSTAIN_GAP_TICKS = 5;
     private static final int MIN_NOTE_TICKS = 1;
+    private static final int SUSTAINED_DURATION_PERCENT = 95;
 
     private final ChordService chordService = new ChordService();
+    private final VelocityHumanizer humanizer = new VelocityHumanizer();
     private final KeyboardConfig config;
     private final TimeSignatureInfo timeInfo;
 
@@ -114,7 +121,7 @@ public class KeyboardMidiService {
     }
 
     private long scaleDuration(long spanTicks) {
-        return Math.max(MIN_NOTE_TICKS, (spanTicks * config.getNoteDurationPercent()) / 100);
+        return Math.max(MIN_NOTE_TICKS, (spanTicks * SUSTAINED_DURATION_PERCENT) / 100);
     }
 
     /**
@@ -134,8 +141,9 @@ public class KeyboardMidiService {
 
     /** Todas as notas no mesmo tick. */
     private void playBlock(Track track, List<Integer> notes, long tick, long holdUntil) {
+        int velocity = humanizer.around(config.getVelocityLevel());
         for (int note : notes) {
-            addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_KEYBOARD, note, config.getVelocity(), tick);
+            addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_KEYBOARD, note, velocity, tick);
             addNoteEvent(track, ShortMessage.NOTE_OFF, CHANNEL_KEYBOARD, note, 0,
                     Math.max(tick + MIN_NOTE_TICKS, holdUntil));
         }
@@ -166,7 +174,7 @@ public class KeyboardMidiService {
                     Math.max(tick + MIN_NOTE_TICKS, tick + subStep - SUSTAIN_GAP_TICKS),
                     totalTicks - 1);
             addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_KEYBOARD,
-                    ordered.get(i), config.getVelocity(), tick);
+                    ordered.get(i), humanizer.around(config.getVelocityLevel()), tick);
             addNoteEvent(track, ShortMessage.NOTE_OFF, CHANNEL_KEYBOARD,
                     ordered.get(i), 0, noteOff);
         }

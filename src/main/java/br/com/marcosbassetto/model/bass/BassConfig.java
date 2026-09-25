@@ -1,23 +1,22 @@
 package br.com.marcosbassetto.model.bass;
 
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityLevel;
 
 /**
  * Configurações editáveis do baixo. Reunidas em um POJO para que a
  * {@code BassConfigWindow} possa alterá-las sem tocar no serviço.
+ *
+ * <p>A duração das notas não é editável: o baixo deriva o tamanho da nota do
+ * compasso informado no formulário principal. A intensidade é escolhida por
+ * nível (fraco/médio/alto) e humanizada na geração.
  */
 public class BassConfig {
 
-    public static final int MIN_VELOCITY = 60;
-    public static final int MAX_VELOCITY = 120;
-    public static final int MIN_DURATION_PERCENT = 40;
-    public static final int MAX_DURATION_PERCENT = 100;
-
     private BassRhythmPattern pattern;
     private String preset = BassRhythmPattern.PRESET_FUNDAMENTAL_SIMPLES;
-    private int velocity = 90;
+    private VelocityLevel velocityLevel = VelocityLevel.DEFAULT;
     private int programChange = 33;       // Electric Bass (finger)
-    private int noteDurationPercent = 80; // 80% do passo = leve staccato
 
     public BassConfig(TimeSignatureInfo timeInfo) {
         TimeSignatureInfo info = timeInfo != null ? timeInfo : TimeSignatureInfo.parse("4/4");
@@ -61,12 +60,14 @@ public class BassConfig {
         }
     }
 
-    public int getVelocity() {
-        return velocity;
+    public VelocityLevel getVelocityLevel() {
+        return velocityLevel;
     }
 
-    public void setVelocity(int velocity) {
-        this.velocity = clamp(velocity, MIN_VELOCITY, MAX_VELOCITY);
+    public void setVelocityLevel(VelocityLevel velocityLevel) {
+        if (velocityLevel != null) {
+            this.velocityLevel = velocityLevel;
+        }
     }
 
     public int getProgramChange() {
@@ -77,17 +78,5 @@ public class BassConfig {
         if (programChange >= 0 && programChange <= 127) {
             this.programChange = programChange;
         }
-    }
-
-    public int getNoteDurationPercent() {
-        return noteDurationPercent;
-    }
-
-    public void setNoteDurationPercent(int percent) {
-        this.noteDurationPercent = clamp(percent, MIN_DURATION_PERCENT, MAX_DURATION_PERCENT);
-    }
-
-    private static int clamp(int value, int min, int max) {
-        return Math.max(min, Math.min(max, value));
     }
 }

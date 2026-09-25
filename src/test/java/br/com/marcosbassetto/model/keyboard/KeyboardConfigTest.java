@@ -1,6 +1,7 @@
 package br.com.marcosbassetto.model.keyboard;
 
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityLevel;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -14,8 +15,7 @@ class KeyboardConfigTest {
     @Test
     void defaultsAreSensible() {
         KeyboardConfig config = new KeyboardConfig(FOUR_FOUR);
-        assertEquals(70, config.getVelocity(), "teclado mais suave que guitarra/baixo");
-        assertEquals(95, config.getNoteDurationPercent());
+        assertEquals(VelocityLevel.MEDIO, config.getVelocityLevel());
         assertEquals(0, config.getProgramChange(), "Acoustic Grand Piano");
         assertTrue(config.isSustainEnabled());
         assertEquals(16, config.getPattern().getTotalSteps());
@@ -29,21 +29,17 @@ class KeyboardConfigTest {
     }
 
     @Test
-    void velocityIsClampedToRange() {
+    void velocityLevelChanges() {
         KeyboardConfig config = new KeyboardConfig(FOUR_FOUR);
-        config.setVelocity(200);
-        assertEquals(KeyboardConfig.MAX_VELOCITY, config.getVelocity());
-        config.setVelocity(20);
-        assertEquals(KeyboardConfig.MIN_VELOCITY, config.getVelocity());
+        config.setVelocityLevel(VelocityLevel.FRACO);
+        assertEquals(VelocityLevel.FRACO, config.getVelocityLevel());
     }
 
     @Test
-    void durationIsClampedToRange() {
+    void nullVelocityLevelIsIgnored() {
         KeyboardConfig config = new KeyboardConfig(FOUR_FOUR);
-        config.setNoteDurationPercent(200);
-        assertEquals(KeyboardConfig.MAX_DURATION_PERCENT, config.getNoteDurationPercent());
-        config.setNoteDurationPercent(10);
-        assertEquals(KeyboardConfig.MIN_DURATION_PERCENT, config.getNoteDurationPercent());
+        config.setVelocityLevel(null);
+        assertEquals(VelocityLevel.MEDIO, config.getVelocityLevel());
     }
 
     @Test

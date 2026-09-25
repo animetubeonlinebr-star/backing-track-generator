@@ -1,10 +1,13 @@
 package br.com.marcosbassetto.service;
 
+import br.com.marcosbassetto.model.guitar.GuitarArticulation;
 import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.guitar.GuitarRhythmPattern;
 import br.com.marcosbassetto.model.guitar.GuitarRhythmPattern.AttackType;
 import br.com.marcosbassetto.model.music.BackingTrack;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityHumanizer;
+import br.com.marcosbassetto.model.performance.VelocityLevel;
 
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MidiEvent;
@@ -18,6 +21,12 @@ import java.util.List;
  * Gera a trilha de guitarra rítmica. A lógica é "para cada passo com ataque,
  * toque o acorde da forma certa" — o padrão rítmico define QUANDO, o
  * {@link VoicingService} define O QUÊ (registro e voice leading).
+ *
+ * <p>A articulação escolhida na configuração decide como cada ataque é
+ * executado: em modo dedilhado os ataques de batida viram dedilhado, e no modo
+ * batida os ataques de dedilhado viram batida para baixo. Assim o preset
+ * rítmico continua definindo o groove, mas a textura obedece à configuração.
+ * As velocities são humanizadas em torno do nível escolhido.
  */
 public class GuitarMidiService {
 
@@ -25,6 +34,7 @@ public class GuitarMidiService {
     private static final int NOTE_OFF_GAP_TICKS = 5;
 
     private final ChordService chordService = new ChordService();
+    private final VelocityHumanizer humanizer = new VelocityHumanizer();
     private final GuitarConfig config;
     private final TimeSignatureInfo timeInfo;
 
@@ -54,7 +64,7 @@ public class GuitarMidiService {
             previousVoicing = voicing;
 
             for (int step = 0; step < pattern.getTotalSteps(); step++) {
-                AttackType attack = pattern.getAttack(step);
+                AttackType attack = effectiveAttack(pattern.getAttack(step));
                 if (attack == AttackType.NONE) {
                     continue;
                 }
@@ -77,17 +87,34 @@ public class GuitarMidiService {
         }
     }
 
+    /**
+     * Ajusta o ataque do padrão à articulação escolhida: no dedilhado os ataques
+     * de batida viram dedilhado, e na batida os ataques de dedilhado viram batida
+     * para baixo. O silêncio (NONE) é preservado. Sem isso o preset rítmico
+     * reintroduziria a textura desligada.
+     */
+    private AttackType effectiveAttack(AttackType attack) {
+        if (attack == AttackType.NONE) {
+            return attack;
+        }
+        if (config.getArticulation() == GuitarArticulation.DEDILHADO) {
+            return AttackType.PICK;
+        }
+        return attack == AttackType.PICK ? AttackType.STRUM_DOWN : attack;
+    }
+
     /** Batida: notas em sequência, graves primeiro (down) ou agudos primeiro (up). */
     private void playStrum(Track track, List<Integer> notes, long startTick,
                            long stepTicks, boolean down) {
         List<Integer> ordered = down ? notes : reversed(notes);
-        int velocity = down ? config.getVelocityDown() : config.getVelocityUp();
+        VelocityLevel level = down ? config.getVelocityDownLevel() : config.getVelocityUpLevel();
         long noteOffTick = startTick + stepTicks - NOTE_OFF_GAP_TICKS;
 
         for (int i = 0; i < ordered.size(); i++) {
             int note = ordered.get(i);
             long tick = startTick + ((long) i * config.getStrumOffsetTicks());
-            addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_GUITAR, note, velocity, tick);
+            addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_GUITAR, note,
+                    humanizer.around(level), tick);
             addNoteEvent(track, ShortMessage.NOTE_OFF, CHANNEL_GUITAR, note, 0,
                     Math.max(tick + 1, noteOffTick));
         }
@@ -103,7 +130,7 @@ public class GuitarMidiService {
             int note = notes.get(i);
             long tick = startTick + ((long) i * subStep);
             addNoteEvent(track, ShortMessage.NOTE_ON, CHANNEL_GUITAR, note,
-                    config.getVelocityPick(), tick);
+                    humanizer.around(config.getVelocityPickLevel()), tick);
             addNoteEvent(track, ShortMessage.NOTE_OFF, CHANNEL_GUITAR, note, 0,
                     Math.max(tick + 1, tick + subStep - NOTE_OFF_GAP_TICKS));
         }

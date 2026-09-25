@@ -1,23 +1,22 @@
 package br.com.marcosbassetto.model.keyboard;
 
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.model.performance.VelocityLevel;
 
 /**
- * Configurações editáveis do teclado: padrão rítmico, velocity, timbre,
- * duração das notas e pedal de sustain.
+ * Configurações editáveis do teclado: padrão rítmico, timbre, intensidade e
+ * pedal de sustain.
+ *
+ * <p>A duração das notas não é editável: o teclado deriva o tamanho das notas
+ * do compasso informado no formulário principal. A intensidade é escolhida por
+ * nível (fraco/médio/alto) e humanizada na geração.
  */
 public class KeyboardConfig {
 
-    public static final int MIN_VELOCITY = 40;
-    public static final int MAX_VELOCITY = 110;
-    public static final int MIN_DURATION_PERCENT = 50;
-    public static final int MAX_DURATION_PERCENT = 100;
-
     private KeyboardRhythmPattern pattern;
     private String preset = KeyboardRhythmPattern.PRESET_PAD_SUSTENTADO;
-    private int velocity = 70;
+    private VelocityLevel velocityLevel = VelocityLevel.DEFAULT;
     private int programChange = 0;        // Acoustic Grand Piano
-    private int noteDurationPercent = 95; // piano sustenta naturalmente
     private boolean sustainEnabled = true;
 
     public KeyboardConfig(TimeSignatureInfo timeInfo) {
@@ -59,12 +58,14 @@ public class KeyboardConfig {
         }
     }
 
-    public int getVelocity() {
-        return velocity;
+    public VelocityLevel getVelocityLevel() {
+        return velocityLevel;
     }
 
-    public void setVelocity(int velocity) {
-        this.velocity = clamp(velocity, MIN_VELOCITY, MAX_VELOCITY);
+    public void setVelocityLevel(VelocityLevel velocityLevel) {
+        if (velocityLevel != null) {
+            this.velocityLevel = velocityLevel;
+        }
     }
 
     public int getProgramChange() {
@@ -77,23 +78,11 @@ public class KeyboardConfig {
         }
     }
 
-    public int getNoteDurationPercent() {
-        return noteDurationPercent;
-    }
-
-    public void setNoteDurationPercent(int percent) {
-        this.noteDurationPercent = clamp(percent, MIN_DURATION_PERCENT, MAX_DURATION_PERCENT);
-    }
-
     public boolean isSustainEnabled() {
         return sustainEnabled;
     }
 
     public void setSustainEnabled(boolean sustainEnabled) {
         this.sustainEnabled = sustainEnabled;
-    }
-
-    private static int clamp(int value, int min, int max) {
-        return Math.max(min, Math.min(max, value));
     }
 }
