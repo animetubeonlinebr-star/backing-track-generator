@@ -20,7 +20,7 @@ public class GuitarConfig {
     private String appliedPreset = null;
     private int appliedSteps = -1;
     private int strumOffsetTicks = 15;
-    private GuitarArticulation articulation = GuitarArticulation.BATIDA;
+    private GuitarArticulation articulation = GuitarArticulation.MISTA;
     private VelocityLevel velocityDownLevel = VelocityLevel.MEDIO;
     private VelocityLevel velocityUpLevel = VelocityLevel.FRACO;
     private VelocityLevel velocityPickLevel = VelocityLevel.MEDIO;

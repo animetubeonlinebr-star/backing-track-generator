@@ -88,19 +88,23 @@ public class GuitarMidiService {
     }
 
     /**
-     * Ajusta o ataque do padrão à articulação escolhida: no dedilhado os ataques
-     * de batida viram dedilhado, e na batida os ataques de dedilhado viram batida
-     * para baixo. O silêncio (NONE) é preservado. Sem isso o preset rítmico
-     * reintroduziria a textura desligada.
+     * Ajusta o ataque do padrão à articulação escolhida. A mista preserva o
+     * preset como está; os modos puros convertem os ataques do outro tipo, senão
+     * o preset rítmico reintroduziria a textura desligada. O silêncio (NONE) é
+     * sempre preservado.
      */
     private AttackType effectiveAttack(AttackType attack) {
         if (attack == AttackType.NONE) {
             return attack;
         }
-        if (config.getArticulation() == GuitarArticulation.DEDILHADO) {
+        GuitarArticulation articulation = config.getArticulation();
+        if (articulation.usesStrum() && !articulation.usesPick()) {
+            return attack == AttackType.PICK ? AttackType.STRUM_DOWN : attack;
+        }
+        if (articulation.usesPick() && !articulation.usesStrum()) {
             return AttackType.PICK;
         }
-        return attack == AttackType.PICK ? AttackType.STRUM_DOWN : attack;
+        return attack;
     }
 
     /** Batida: notas em sequência, graves primeiro (down) ou agudos primeiro (up). */

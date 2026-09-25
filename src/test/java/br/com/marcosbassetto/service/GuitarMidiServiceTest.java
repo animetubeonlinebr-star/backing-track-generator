@@ -230,6 +230,28 @@ class GuitarMidiServiceTest {
     }
 
     @Test
+    void mistaArticulationKeepsThePresetTexture() throws Exception {
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
+        GuitarConfig config = new GuitarConfig();
+        config.setArticulation(GuitarArticulation.MISTA);
+        config.getPattern().setAttack(0, GuitarRhythmPattern.AttackType.STRUM_DOWN);
+        config.getPattern().setAttack(2, GuitarRhythmPattern.AttackType.PICK);
+
+        Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
+        new GuitarMidiService(config, timeInfo)
+                .generateGuitarTrack(sequence, track("C", "4/4"), 1920, PPQ);
+        List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
+
+        long stepTicks = timeInfo.getStepTicks(PPQ);
+        long secondAttackTick = 2 * stepTicks;
+        assertTrue(ons.stream().anyMatch(n -> n.tick() == 15),
+                "o ataque de batida deve continuar espalhado");
+        assertTrue(ons.stream().anyMatch(n -> n.tick() == secondAttackTick
+                        + stepTicks / 3),
+                "o ataque de dedilhado deve continuar sequencial");
+    }
+
+    @Test
     void eachAttackStartsAtItsStepTick() throws Exception {
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
         GuitarConfig config = new GuitarConfig();

@@ -88,9 +88,9 @@ class GuitarConfigTest {
     }
 
     @Test
-    void articulationDefaultsToBatidaAndIgnoresNulls() {
+    void articulationDefaultsToMistaAndIgnoresNulls() {
         GuitarConfig config = new GuitarConfig();
-        assertEquals(GuitarArticulation.BATIDA, config.getArticulation());
+        assertEquals(GuitarArticulation.MISTA, config.getArticulation());
         config.setArticulation(GuitarArticulation.DEDILHADO);
         assertEquals(GuitarArticulation.DEDILHADO, config.getArticulation());
         config.setArticulation(null);
@@ -101,8 +101,19 @@ class GuitarConfigTest {
     void articulationIsParsedFromItsLabel() {
         assertEquals(GuitarArticulation.DEDILHADO, GuitarArticulation.fromLabel("dedilhado"));
         assertEquals(GuitarArticulation.BATIDA, GuitarArticulation.fromLabel("Batida"));
-        assertEquals(GuitarArticulation.BATIDA, GuitarArticulation.fromLabel("inexistente"));
-        assertEquals(GuitarArticulation.BATIDA, GuitarArticulation.fromLabel(null));
+        assertEquals(GuitarArticulation.MISTA, GuitarArticulation.fromLabel("mista"));
+        assertEquals(GuitarArticulation.MISTA, GuitarArticulation.fromLabel("inexistente"));
+        assertEquals(GuitarArticulation.MISTA, GuitarArticulation.fromLabel(null));
+    }
+
+    @Test
+    void articulationControlsWhichVelocityApplies() {
+        assertTrue(GuitarArticulation.BATIDA.usesStrum());
+        assertNotEquals(true, GuitarArticulation.BATIDA.usesPick());
+        assertTrue(GuitarArticulation.DEDILHADO.usesPick());
+        assertNotEquals(true, GuitarArticulation.DEDILHADO.usesStrum());
+        assertTrue(GuitarArticulation.MISTA.usesStrum());
+        assertTrue(GuitarArticulation.MISTA.usesPick());
     }
 
     @Test

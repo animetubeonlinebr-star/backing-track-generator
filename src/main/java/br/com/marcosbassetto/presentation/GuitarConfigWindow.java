@@ -104,8 +104,8 @@ public class GuitarConfigWindow extends JDialog {
     private void applyArticulationEnabledState() {
         GuitarArticulation articulation =
                 (GuitarArticulation) cmbArticulation.getSelectedItem();
-        boolean strum = articulation != GuitarArticulation.DEDILHADO;
-        boolean pick = articulation == GuitarArticulation.DEDILHADO;
+        boolean strum = articulation == null || articulation.usesStrum();
+        boolean pick = articulation == null || articulation.usesPick();
 
         cmbVelocityDown.setEnabled(strum);
         cmbVelocityUp.setEnabled(strum);
