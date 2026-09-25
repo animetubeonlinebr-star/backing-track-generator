@@ -10,12 +10,46 @@ import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import javax.sound.midi.*;
 import javax.swing.*;
 import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Gera os arquivos MIDI do backing track.
+ *
+ * <p>A exportação é individual: um arquivo por instrumento habilitado, com nome
+ * fixo ({@code bass.midi}, {@code guitar.midi}, {@code keyboard.midi},
+ * {@code drums.midi}). Como os arquivos são complementares e devem formar o
+ * mesmo backing track quando abertos juntos, cada um carrega o mesmo cabeçalho
+ * (BPM e fórmula de compasso) e a mesma quantidade de ticks, derivados de um
+ * único {@link BackingTrack}. Essa consistência é o que faz os arquivos
+ * começarem e terminarem alinhados.
+ *
+ * <p>O mix completo continua disponível em {@link #createSequence()}; os
+ * arquivos individuais saem de {@link #createInstrumentSequence(Instrument)}.
+ */
 public class MidiGenerationService {
 
     private static final int CHANNEL_HARMONY = 0;
     private static final int PPQ = 480;
+
+    /** Instrumentos exportáveis, cada um com o nome de arquivo padrão. */
+    public enum Instrument {
+        BASS("bass.midi"),
+        GUITAR("guitar.midi"),
+        KEYBOARD("keyboard.midi"),
+        DRUMS("drums.midi");
+
+        private final String fileName;
+
+        Instrument(String fileName) {
+            this.fileName = fileName;
+        }
+
+        public String getFileName() {
+            return fileName;
+        }
+    }
 
     private final BackingTrack backingTrack;
     private final DrumConfig drumConfig;
@@ -47,55 +81,103 @@ public class MidiGenerationService {
         this.enableKeyboard = enableKeyboard;
     }
 
+    /**
+     * Pede a pasta de destino e grava um arquivo por instrumento habilitado.
+     * A escolha é de diretório, não de arquivo: os nomes são fixos.
+     */
     public void generate() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Salvar Arquivo MIDI");
-        fileChooser.setSelectedFile(new File("backing_track.mid"));
+        JFileChooser directoryChooser = new JFileChooser();
+        directoryChooser.setDialogTitle("Escolha a pasta para salvar os arquivos MIDI");
+        directoryChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        directoryChooser.setAcceptAllFileFilterUsed(false);
 
-        int userSelection = fileChooser.showSaveDialog(null);
+        if (directoryChooser.showSaveDialog(null) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
 
-        if (userSelection == JFileChooser.APPROVE_OPTION) {
-            File outputFile = fileChooser.getSelectedFile();
+        File directory = directoryChooser.getSelectedFile();
 
-            if (!outputFile.getName().toLowerCase().endsWith(".mid") && !outputFile.getName().toLowerCase().endsWith(".midi")) {
-                outputFile = new File(outputFile.getAbsolutePath() + ".mid");
+        try {
+            List<File> generated = generateTo(directory);
+            if (generated.isEmpty()) {
+                JOptionPane.showMessageDialog(null,
+                        "Nenhum instrumento selecionado. Marque ao menos um para gerar.");
+                return;
             }
-
-            try {
-                Sequence sequence = createSequence();
-                MidiSystem.write(sequence, 1, outputFile);
-                JOptionPane.showMessageDialog(null, "MIDI gerado com sucesso!\nSalvo em: " + outputFile.getAbsolutePath());
-            } catch (Exception e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(null, "Erro ao gerar arquivo MIDI: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
-            }
+            JOptionPane.showMessageDialog(null, buildSuccessMessage(directory, generated));
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null,
+                    "Erro ao gerar os arquivos MIDI: " + e.getMessage(),
+                    "Erro", JOptionPane.ERROR_MESSAGE);
         }
     }
 
+    /**
+     * Grava um arquivo por instrumento habilitado, com o nome padrão de cada um,
+     * reutilizando o mesmo cabeçalho de tempo/compasso. Devolve os arquivos
+     * escritos, na ordem em que foram gerados.
+     */
+    public List<File> generateTo(File directory) throws IOException, InvalidMidiDataException {
+        ensureDirectory(directory);
+
+        List<File> written = new ArrayList<>();
+        for (Instrument instrument : Instrument.values()) {
+            if (!isEnabled(instrument)) {
+                continue;
+            }
+            File outputFile = new File(directory, instrument.getFileName());
+            MidiSystem.write(createInstrumentSequence(instrument), 1, outputFile);
+            written.add(outputFile);
+        }
+        return written;
+    }
+
+    private static void ensureDirectory(File directory) throws IOException {
+        if (directory == null) {
+            throw new IOException("Pasta de destino não informada.");
+        }
+        if (directory.exists() && !directory.isDirectory()) {
+            throw new IOException("O caminho informado não é uma pasta: " + directory);
+        }
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw new IOException("Não foi possível criar a pasta: " + directory);
+        }
+    }
+
+    private boolean isEnabled(Instrument instrument) {
+        return switch (instrument) {
+            case BASS -> enableBass;
+            case GUITAR -> enableGuitar;
+            case KEYBOARD -> enableKeyboard;
+            case DRUMS -> enableDrums;
+        };
+    }
+
+    private static String buildSuccessMessage(File directory, List<File> generated) {
+        StringBuilder message = new StringBuilder("MIDI gerado com sucesso!\n\nPasta: ")
+                .append(directory.getAbsolutePath())
+                .append("\n\nArquivos:\n");
+        for (File file : generated) {
+            message.append("• ").append(file.getName()).append('\n');
+        }
+        return message.toString();
+    }
+
+    /**
+     * Mix completo: harmonia (sempre presente) mais todos os instrumentos
+     * habilitados, tudo num único {@link Sequence}. Também é a base do cabeçalho
+     * compartilhado pelos arquivos individuais.
+     */
     public Sequence createSequence() throws InvalidMidiDataException {
-        Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
+        Sequence sequence = createBaseSequence();
 
         TimeSignatureInfo timeInfo = TimeSignatureInfo.parse(backingTrack.getMeasure());
-
-        Track controlTrack = sequence.createTrack();
-        Track drumTrack = sequence.createTrack();
-
-        int bpm = parseBpm(backingTrack.getBpm());
-        int totalSeconds = (parseDuration(backingTrack.getDurationMinutes()) * 60) + parseDuration(backingTrack.getDurationSeconds());
-
-        setTempo(controlTrack, bpm);
-        writeTimeSignatureEvent(controlTrack, timeInfo);
-
-        ShortMessage programChange = new ShortMessage();
-        programChange.setMessage(ShortMessage.PROGRAM_CHANGE, CHANNEL_HARMONY, 0, 0);
-        controlTrack.add(new MidiEvent(programChange, 0));
-
-        double totalMinutes = totalSeconds / 60.0;
-        long totalTicks = (long) (totalMinutes * bpm * PPQ);
+        long totalTicks = totalTicks(timeInfo);
 
         addHarmonyTrack(sequence, backingTrack, timeInfo, totalTicks);
         if (enableDrums) {
-            drumMidiService.generateDrumTrack(drumTrack, drumConfig, PPQ, totalTicks);
+            drumMidiService.generateDrumTrack(sequence.createTrack(), drumConfig, PPQ, totalTicks);
         }
         if (enableGuitar) {
             guitarConfig.syncPatternTo(timeInfo);
@@ -119,10 +201,82 @@ public class MidiGenerationService {
         return sequence;
     }
 
+    /**
+     * Sequence de um único instrumento, com o cabeçalho de tempo/compasso e a
+     * duração iguais aos do mix. Graças a esse cabeçalho comum, os arquivos
+     * individuais podem ser abertos juntos como um mesmo backing track.
+     */
+    public Sequence createInstrumentSequence(Instrument instrument) throws InvalidMidiDataException {
+        Sequence sequence = createBaseSequence();
+
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse(backingTrack.getMeasure());
+        long totalTicks = totalTicks(timeInfo);
+
+        switch (instrument) {
+            case BASS -> {
+                BassConfig effectiveBassConfig = bassConfig != null ? bassConfig : new BassConfig(timeInfo);
+                effectiveBassConfig.syncToTimeSignature(timeInfo);
+                new BassMidiService(effectiveBassConfig, timeInfo)
+                        .generateBassTrack(sequence, backingTrack, totalTicks, PPQ);
+            }
+            case GUITAR -> {
+                guitarConfig.syncPatternTo(timeInfo);
+                new GuitarMidiService(guitarConfig, timeInfo)
+                        .generateGuitarTrack(sequence, backingTrack, totalTicks, PPQ);
+            }
+            case KEYBOARD -> {
+                KeyboardConfig effectiveKeyboardConfig =
+                        keyboardConfig != null ? keyboardConfig : new KeyboardConfig(timeInfo);
+                effectiveKeyboardConfig.syncToTimeSignature(timeInfo);
+                new KeyboardMidiService(effectiveKeyboardConfig, timeInfo)
+                        .generateKeyboardTrack(sequence, backingTrack, totalTicks, PPQ);
+            }
+            case DRUMS -> drumMidiService.generateDrumTrack(
+                    sequence.createTrack(), drumConfig, PPQ, totalTicks);
+        }
+
+        return sequence;
+    }
+
+    /**
+     * Cria a sequence com o cabeçalho comum: faixa de controle com tempo e
+     * fórmula de compasso. Todos os arquivos partem daqui, o que garante BPM,
+     * compasso e quantidade de ticks idênticos, indispensáveis para que os
+     * arquivos individuais soem alinhados quando abertos juntos.
+     */
+    private Sequence createBaseSequence() throws InvalidMidiDataException {
+        Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
+
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse(backingTrack.getMeasure());
+        Track controlTrack = sequence.createTrack();
+
+        setTempo(controlTrack, parseBpm(backingTrack.getBpm()));
+        writeTimeSignatureEvent(controlTrack, timeInfo);
+
+        return sequence;
+    }
+
+    /** Total de ticks derivado de BPM e duração do formulário principal. */
+    private long totalTicks(TimeSignatureInfo timeInfo) {
+        int bpm = parseBpm(backingTrack.getBpm());
+        int totalSeconds = (parseDuration(backingTrack.getDurationMinutes()) * 60)
+                + parseDuration(backingTrack.getDurationSeconds());
+        double totalMinutes = totalSeconds / 60.0;
+        return (long) (totalMinutes * bpm * PPQ);
+    }
+
     private void addHarmonyTrack(Sequence sequence, BackingTrack backingTrack, TimeSignatureInfo timeInfo, long totalTicks) {
         Track track = sequence.createTrack();
         String[] chords = backingTrack.getProgression().split("\\s*-\\s*");
         long measureTicks = timeInfo.getMeasureTicks(PPQ);
+
+        ShortMessage programChange = new ShortMessage();
+        try {
+            programChange.setMessage(ShortMessage.PROGRAM_CHANGE, CHANNEL_HARMONY, 0, 0);
+            track.add(new MidiEvent(programChange, 0));
+        } catch (InvalidMidiDataException e) {
+            e.printStackTrace();
+        }
         long currentTick = 0;
 
         int chordIndex = 0;

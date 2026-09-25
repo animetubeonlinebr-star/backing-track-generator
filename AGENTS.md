@@ -27,6 +27,11 @@ Layers under `src/main/java/br/com/marcosbassetto`:
 - `model.keyboard` — `KeyboardConfig` (preset + velocity level + program + sustain), `KeyboardRhythmPattern` (per-step `AttackType` grid with presets).
 - `model.performance` — `VelocityLevel` (`FRACO`/`MEDIO`/`ALTO`, each with an average) and `VelocityHumanizer` (random velocity around an average, in steps of 5, clamped to 1–127).
 
+## Export: one file per instrument
+`generate()` asks for a **directory** (not a filename) and writes one file per enabled instrument using fixed names — `bass.midi`, `guitar.midi`, `keyboard.midi`, `drums.midi` (see `MidiGenerationService.Instrument`). The files are complementary: opened together they form one backing track, so they must all share BPM, time signature and tick length. That consistency comes from `createBaseSequence()`, which every file starts from, and `totalTicks(...)`, both derived from the single `BackingTrack`. Adding a header in only one file (or computing `totalTicks` differently per instrument) desynchronizes the set — the tests `everyFileCarriesTheSameTempoAndTimeSignature` and `everyFileContainsOnlyItsOwnInstrumentChannelAndHarmonyHeader` guard it.
+- `generateTo(File)` is the non-interactive path used by tests; it creates the directory if needed and returns the files written. `createSequence()` still builds the full mix (harmony + all enabled instruments) and is the side-effect-free path for tests.
+- Each individual file contains the shared control track (tempo + time signature) plus only its own instrument; the harmony track (channel 0) belongs to the mix and is not duplicated into every file.
+
 ## Rhythm as a pattern (not per-note expression)
 For backing tracks each instrument is defined by WHEN and WHAT it plays, not HOW each note is expressed. There is deliberately no pitch bend / vibrato / slide / slap.
 - `GuitarRhythmPattern` is a per-step `AttackType` grid: `STRUM_DOWN`, `STRUM_UP`, `PICK`, `NONE`. Presets: `BATIDA_BASICA`, `BATIDA_BALADA`, `BATIDA_ROCK`, `DEDILHADO`, `REGGAE`.
@@ -63,7 +68,7 @@ Note duration is no longer a UI setting. The bass derives it from the meter (`st
 - 9 — drums (GM percussion)
 
 ## Conventions & gotchas
-- `MidiGenerationService.createSequence()` is public and side-effect free — use it for tests; `generate()` opens a `JFileChooser` and is interactive.
+- `MidiGenerationService.createSequence()` and `generateTo(File)` are public and side-effect free (besides writing files) — use them for tests; `generate()` opens a directory chooser and is interactive.
 - MIDI velocity/note values must be 0–127 or `ShortMessage` throws; clamp in config setters. `VelocityHumanizer` clamps too, since the offsets are computed from the average.
 - The UI combo boxes hold `VelocityLevel`/`GuitarArticulation` values directly, so `toString()` returns the Portuguese label shown to the user; `fromLabel` accepts either the label or the enum name for parsing.
 - `GuitarConfig.syncPatternTo` tracks the applied preset/size, not just the size, because the default is 16 steps which equals 4/4 — a size-only check silently skips applying the preset.

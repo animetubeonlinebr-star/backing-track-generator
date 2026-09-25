@@ -10,14 +10,21 @@ import br.com.marcosbassetto.model.keyboard.KeyboardRhythmPattern;
 import br.com.marcosbassetto.model.music.BackingTrack;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import javax.sound.midi.MetaMessage;
 import javax.sound.midi.MidiEvent;
+import javax.sound.midi.MidiSystem;
 import javax.sound.midi.Sequence;
 import javax.sound.midi.ShortMessage;
 import javax.sound.midi.Track;
+import java.io.File;
+import java.nio.file.Path;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -320,5 +327,161 @@ class MidiGenerationServiceTest {
 
         assertEquals(12, keyboardConfig.getPattern().getTotalSteps());
         assertTrue(noteOnCount(threeFour, CHANNEL_KEYBOARD) > 0);
+    }
+
+    // ---- Exportação individual: um arquivo por instrumento ----
+
+    private static MidiGenerationService service(BackingTrack backingTrack,
+                                                 boolean drums, boolean guitar,
+                                                 boolean bass, boolean keyboard) {
+        return new MidiGenerationService(
+                backingTrack, new DrumConfig(backingTrack.getMeasure()),
+                new GuitarConfig(), new BassConfig(TimeSignatureInfo.parse(backingTrack.getMeasure())),
+                new KeyboardConfig(TimeSignatureInfo.parse(backingTrack.getMeasure())),
+                drums, guitar, bass, keyboard);
+    }
+
+    private static List<String> fileNames(List<File> files) {
+        return files.stream().map(File::getName).sorted().toList();
+    }
+
+    @Test
+    void writesOneFilePerEnabledInstrumentWithFixedNames(@TempDir Path tempDir) throws Exception {
+        List<File> generated = service(backingTrack("4/4"), true, true, true, true)
+                .generateTo(tempDir.toFile());
+
+        assertEquals(List.of("bass.midi", "drums.midi", "guitar.midi", "keyboard.midi"),
+                fileNames(generated));
+        for (File file : generated) {
+            assertTrue(file.isFile(), "arquivo nao criado: " + file);
+            assertTrue(file.length() > 0, "arquivo vazio: " + file);
+        }
+    }
+
+    @Test
+    void onlyEnabledInstrumentsProduceFiles(@TempDir Path tempDir) throws Exception {
+        List<File> generated = service(backingTrack("4/4"), false, true, false, true)
+                .generateTo(tempDir.toFile());
+
+        assertEquals(List.of("guitar.midi", "keyboard.midi"), fileNames(generated));
+        assertFalse(new File(tempDir.toFile(), "bass.midi").exists());
+        assertFalse(new File(tempDir.toFile(), "drums.midi").exists());
+    }
+
+    /**
+     * O ponto central: como os arquivos são complementares, todos precisam do
+     * mesmo BPM e do mesmo compasso para soarem alinhados quando abertos juntos.
+     */
+    @Test
+    void everyFileCarriesTheSameTempoAndTimeSignature(@TempDir Path tempDir) throws Exception {
+        List<File> generated = service(backingTrack("4/4"), true, true, true, true)
+                .generateTo(tempDir.toFile());
+
+        byte[] expectedTempo = null;
+        byte[] expectedTimeSignature = null;
+        for (File file : generated) {
+            Sequence sequence = MidiSystem.getSequence(file);
+            byte[] tempo = firstMeta(sequence, 0x51);
+            byte[] timeSignature = firstMeta(sequence, 0x58);
+
+            if (expectedTempo == null) {
+                expectedTempo = tempo;
+                expectedTimeSignature = timeSignature;
+            }
+            assertArrayEquals(expectedTempo, tempo, file.getName() + " com BPM diferente");
+            assertArrayEquals(expectedTimeSignature, timeSignature,
+                    file.getName() + " com compasso diferente");
+        }
+        assertEquals(120, bpmOf(expectedTempo), "BPM derivado do formulario");
+        assertEquals(4, expectedTimeSignature[0] & 0xFF, "numerador do compasso");
+        assertEquals(4, 1 << (expectedTimeSignature[1] & 0xFF), "denominador do compasso");
+    }
+
+    @Test
+    void everyFileContainsOnlyItsOwnInstrumentChannelAndHarmonyHeader(@TempDir Path tempDir)
+            throws Exception {
+        List<File> generated = service(backingTrack("4/4"), true, true, true, true)
+                .generateTo(tempDir.toFile());
+
+        for (File file : generated) {
+            Sequence sequence = MidiSystem.getSequence(file);
+            Set<Integer> channels = channelsUsed(sequence);
+            String name = file.getName();
+
+            switch (instrumentOf(name)) {
+                case BASS -> {
+                    assertTrue(channels.contains(CHANNEL_BASS), name + " sem baixo");
+                    assertFalse(channels.contains(CHANNEL_GUITAR), name + " com guitarra");
+                    assertFalse(channels.contains(CHANNEL_KEYBOARD), name + " com teclado");
+                    assertFalse(channels.contains(CHANNEL_DRUMS), name + " com bateria");
+                }
+                case GUITAR -> {
+                    assertTrue(channels.contains(CHANNEL_GUITAR), name + " sem guitarra");
+                    assertFalse(channels.contains(CHANNEL_BASS), name + " com baixo");
+                    assertFalse(channels.contains(CHANNEL_KEYBOARD), name + " com teclado");
+                    assertFalse(channels.contains(CHANNEL_DRUMS), name + " com bateria");
+                }
+                case KEYBOARD -> {
+                    assertTrue(channels.contains(CHANNEL_KEYBOARD), name + " sem teclado");
+                    assertFalse(channels.contains(CHANNEL_BASS), name + " com baixo");
+                    assertFalse(channels.contains(CHANNEL_GUITAR), name + " com guitarra");
+                    assertFalse(channels.contains(CHANNEL_DRUMS), name + " com bateria");
+                }
+                case DRUMS -> {
+                    assertTrue(channels.contains(CHANNEL_DRUMS), name + " sem bateria");
+                    assertFalse(channels.contains(CHANNEL_BASS), name + " com baixo");
+                    assertFalse(channels.contains(CHANNEL_GUITAR), name + " com guitarra");
+                    assertFalse(channels.contains(CHANNEL_KEYBOARD), name + " com teclado");
+                }
+            }
+            assertFalse(channels.contains(CHANNEL_HARMONY),
+                    name + " nao deve conter a harmonia do mix");
+        }
+    }
+
+    @Test
+    void filesAreWrittenIntoTheChosenDirectory(@TempDir Path tempDir) throws Exception {
+        File nested = tempDir.resolve("saida").toFile();
+        List<File> generated = service(backingTrack("4/4"), false, false, true, false)
+                .generateTo(nested);
+
+        assertEquals(1, generated.size());
+        assertEquals(nested.getAbsolutePath(),
+                generated.get(0).getParentFile().getAbsolutePath());
+    }
+
+    @Test
+    void nullDirectoryIsRejected() {
+        MidiGenerationService service = service(backingTrack("4/4"), true, true, true, true);
+        org.junit.jupiter.api.Assertions.assertThrows(Exception.class,
+                () -> service.generateTo(null));
+    }
+
+    private static byte[] firstMeta(Sequence sequence, int type) {
+        for (Track track : sequence.getTracks()) {
+            for (int i = 0; i < track.size(); i++) {
+                if (track.get(i).getMessage() instanceof MetaMessage meta
+                        && meta.getType() == type) {
+                    return meta.getData();
+                }
+            }
+        }
+        return null;
+    }
+
+    private static int bpmOf(byte[] tempoData) {
+        int mpqn = ((tempoData[0] & 0xFF) << 16)
+                | ((tempoData[1] & 0xFF) << 8)
+                | (tempoData[2] & 0xFF);
+        return 60_000_000 / mpqn;
+    }
+
+    private static MidiGenerationService.Instrument instrumentOf(String fileName) {
+        for (MidiGenerationService.Instrument instrument : MidiGenerationService.Instrument.values()) {
+            if (instrument.getFileName().equals(fileName)) {
+                return instrument;
+            }
+        }
+        throw new IllegalArgumentException("nome inesperado: " + fileName);
     }
 }

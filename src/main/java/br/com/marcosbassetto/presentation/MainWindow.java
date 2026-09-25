@@ -199,6 +199,13 @@ public class MainWindow {
                     && isMeasure(txtMeasure.getText())
                     && isBpm(txtBpm.getText())
                     && isDuration(txtDurationMin.getText(), txtDurationSeg.getText())) {
+                if (!chkDrums.isSelected() && !chkGuitar.isSelected()
+                        && !chkBass.isSelected() && !chkKeyboard.isSelected()) {
+                    JOptionPane.showMessageDialog(frmMainFrame,
+                            "Selecione ao menos um instrumento para gerar.",
+                            "Nenhum instrumento", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
                 BackingTrack backingTrack = new BackingTrack(
                         txtProgression.getText(),
                         txtBpm.getText(),
