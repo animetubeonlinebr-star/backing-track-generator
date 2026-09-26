@@ -11,7 +11,10 @@ import br.com.marcosbassetto.model.music.TimeSignatureInfo;
  * dos valores editáveis pela UI, para que o serviço de MIDI não os tenha fixos.
  *
  * <p>A intensidade (baixa/média/forte) define a velocity média; o valor final
- * de cada nota recebe humanização no {@code GuitarMidiService}.
+ * de cada nota recebe humanização no {@code GuitarMidiService}. A articulação
+ * decide como os ataques do preset são executados, sem alterar o groove: a
+ * batida converte tudo em palhetadas, o dedilhado converte tudo em notas
+ * sequenciais e a mista preserva o preset.
  */
 public class GuitarConfig {
 
@@ -26,6 +29,7 @@ public class GuitarConfig {
     private int strumOffsetTicks = 15;
     private Intensity intensity = Intensity.MEDIA;
     private Register register = Register.GUITAR;
+    private GuitarArticulation articulation = GuitarArticulation.MISTA;
     private int programChange = 25; // Acoustic Guitar (nylon)
 
     /**
@@ -116,6 +120,16 @@ public class GuitarConfig {
     public void setIntensity(Intensity intensity) {
         if (intensity != null) {
             this.intensity = intensity;
+        }
+    }
+
+    public GuitarArticulation getArticulation() {
+        return articulation;
+    }
+
+    public void setArticulation(GuitarArticulation articulation) {
+        if (articulation != null) {
+            this.articulation = articulation;
         }
     }
 

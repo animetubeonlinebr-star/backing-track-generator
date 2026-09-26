@@ -1,5 +1,6 @@
 package br.com.marcosbassetto.service;
 
+import br.com.marcosbassetto.model.guitar.GuitarArticulation;
 import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.guitar.GuitarRhythmPattern;
 import br.com.marcosbassetto.model.music.BackingTrack;
@@ -56,6 +57,68 @@ class GuitarMidiServiceTest {
 
     private static BackingTrack track(String progression, String measure) {
         return new BackingTrack(progression, "120", measure, "0", "8");
+    }
+
+    /**
+     * Articulação de dedilhado: os ataques de batida viram notas sequenciais, mas
+     * o groove (quando há ataque) continua sendo o do preset.
+     */
+    @Test
+    void dedilhadoArticulationTurnsStrumAttacksIntoSequentialPicks() throws Exception {
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
+        GuitarConfig config = new GuitarConfig();
+        config.setArticulation(GuitarArticulation.DEDILHADO);
+        config.getPattern().setAttack(0, GuitarRhythmPattern.AttackType.STRUM_DOWN);
+
+        Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
+        new GuitarMidiService(config, timeInfo)
+                .generateGuitarTrack(sequence, track("C", "4/4"), 1920, PPQ);
+        List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
+
+        assertEquals(3, ons.size(), "dedilhado toca nota a nota, nao o acorde");
+        long stepTicks = timeInfo.getStepTicks(PPQ);
+        assertEquals(stepTicks / 3, ons.get(1).tick(),
+                "as notas saem em sequencia dentro do passo, nao espalhadas pelo offset");
+    }
+
+    /** Articulação de batida: ataques de dedilhado viram palhetada para baixo. */
+    @Test
+    void batidaArticulationTurnsPickAttacksIntoStrums() throws Exception {
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
+        GuitarConfig config = new GuitarConfig();
+        config.setArticulation(GuitarArticulation.BATIDA);
+        config.getPattern().setAttack(0, GuitarRhythmPattern.AttackType.PICK);
+
+        Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
+        new GuitarMidiService(config, timeInfo)
+                .generateGuitarTrack(sequence, track("C", "4/4"), 1920, PPQ);
+        List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
+
+        assertEquals(3, ons.size());
+        assertEquals(0, ons.get(0).tick());
+        assertEquals(15, ons.get(1).tick(), "batida espalha as notas com o offset");
+        assertEquals(30, ons.get(2).tick());
+    }
+
+    /** A articulação mista preserva o preset como está. */
+    @Test
+    void mistaArticulationKeepsThePresetTexture() throws Exception {
+        TimeSignatureInfo timeInfo = TimeSignatureInfo.parse("4/4");
+        GuitarConfig config = new GuitarConfig();
+        config.setArticulation(GuitarArticulation.MISTA);
+        config.getPattern().setAttack(0, GuitarRhythmPattern.AttackType.STRUM_DOWN);
+        config.getPattern().setAttack(2, GuitarRhythmPattern.AttackType.PICK);
+
+        Sequence sequence = new Sequence(Sequence.PPQ, PPQ);
+        new GuitarMidiService(config, timeInfo)
+                .generateGuitarTrack(sequence, track("C", "4/4"), 1920, PPQ);
+        List<NoteOn> ons = noteOns(sequence.getTracks()[0]);
+
+        long stepTicks = timeInfo.getStepTicks(PPQ);
+        assertTrue(ons.stream().anyMatch(n -> n.tick() == 15),
+                "o ataque de batida continua espalhado");
+        assertTrue(ons.stream().anyMatch(n -> n.tick() == (2 * stepTicks) + (stepTicks / 3)),
+                "o ataque de dedilhado continua sequencial");
     }
 
     private static GuitarConfig configFor(BackingTrack backingTrack, String preset) {

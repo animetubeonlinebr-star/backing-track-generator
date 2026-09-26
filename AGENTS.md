@@ -22,7 +22,7 @@ Layers under `src/main/java/br/com/marcosbassetto`:
 - `service` — MIDI generation. `MidiGenerationService` orchestrates: builds the `Sequence` (PPQ 480), tempo/time-signature meta events, harmony track, and delegates to `DrumMidiService` / `GuitarMidiService`. `ChordService` parses chord symbols to MIDI notes (root, slash bass, extensions; falls back to C major on invalid input). `VoicingService` maps raw chord notes to instrument registers with voice leading.
 - `model.music` — `BackingTrack` (DTO, all fields `String`), `TimeSignatureInfo` (record; validates `N/D`, computes beats/steps/ticks, detects compound meters), `Intensity` (baixa/média/forte), `Instrument` (per-instrument MIDI file names), `StylePreset` (Blues/Bossa Nova/Jazz/Reggae/Rock), `Register` (per-instrument pitch range).
 - `model.drum` — `DrumConfig` (grid + intensity + style), `DrumPattern` (boolean grid; `applyDefaultPattern` and `applyStylePattern`), `DrumInstrument` (enum with default MIDI notes).
-- `model.guitar` — `GuitarConfig` (pattern + strum offset + intensity + program + register), `GuitarRhythmPattern` (per-step `AttackType` grid with presets).
+- `model.guitar` — `GuitarConfig` (pattern + strum offset + intensity + articulation + program + register), `GuitarRhythmPattern` (per-step `AttackType` grid with presets), `GuitarArticulation` (batida/dedilhado/mista).
 - `model.bass` — `BassConfig` (preset + intensity + note duration + program + register), `BassRhythmPattern` (per-step `BassNoteType` grid with presets).
 - `model.keyboard` — `KeyboardConfig` (preset + intensity + program + duration + sustain + register), `KeyboardRhythmPattern` (per-step `AttackType` grid with presets).
 
@@ -66,6 +66,18 @@ Velocity is no longer a raw number in the UI. Each instrument exposes an **inten
 - The mean stays near the chosen level (tests assert the average is within ~8 of the intensity mean), so "humanize" adds variation without changing the overall dynamic.
 - `VelocityHumanizer` accepts a seeded `Random` for deterministic tests; tests that need exact accents construct it with `maximumDeviation = 0`.
 - Instrument services take the humanizer as an optional constructor argument: `new GuitarMidiService(config, timeInfo, humanizer)`.
+
+## Guitar articulation
+`GuitarArticulation` (`BATIDA`, `DEDILHADO`, `MISTA`) decides how the preset's attacks are *executed*, independently of the groove (which attacks exist and when):
+- `BATIDA` converts every attack into a down-strum; `DEDILHADO` converts every attack into a sequential pick; `MISTA` keeps the preset texture as-is (strums and picks coexisting).
+- `GuitarMidiService.effectiveAttack()` does the conversion; `NONE` is always preserved so the rhythm never gains attacks.
+- Intensity stays the single source of dynamics: articulation picks *which* of the three base velocities (down/up/pick) applies, it does not introduce new velocity levels.
+
+## Merge note: two parallel intensity implementations
+`main` and this branch had each implemented intensity + per-instrument files independently. The merge resolved in favour of this branch's design, which matches the requested contract:
+- `Intensity` (`model.music`, labels Baixa/Média/Forte) — the remote `VelocityLevel` (`model.performance`, Fraco/Médio/Alto) and its duplicate humanizer were removed.
+- `Instrument` (`model.music`) names the files exactly as requested: `Guitar.midi`, `Bass.midi`, `keyboard.midi`, `drums.midi` (the remote used lowercase).
+- `GuitarArticulation` was the one remote-only feature worth keeping and was ported onto this design.
 
 ## Per-instrument MIDI export
 `MidiGenerationService.generate()` writes the full mix (`backing_track.mid`) **and** one independent sequence per enabled instrument, named via the `Instrument` enum:

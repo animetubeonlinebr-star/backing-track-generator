@@ -1,5 +1,6 @@
 package br.com.marcosbassetto.service;
 
+import br.com.marcosbassetto.model.guitar.GuitarArticulation;
 import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.guitar.GuitarRhythmPattern;
 import br.com.marcosbassetto.model.guitar.GuitarRhythmPattern.AttackType;
@@ -71,7 +72,7 @@ public class GuitarMidiService {
             previousVoicing = voicing;
 
             for (int step = 0; step < pattern.getTotalSteps(); step++) {
-                AttackType attack = pattern.getAttack(step);
+                AttackType attack = effectiveAttack(pattern.getAttack(step));
                 if (attack == AttackType.NONE) {
                     continue;
                 }
@@ -94,6 +95,26 @@ public class GuitarMidiService {
             currentMeasureTick += measureTicks;
             chordIndex++;
         }
+    }
+
+    /**
+     * Ajusta o ataque do padrão à articulação escolhida. A mista preserva o
+     * preset como está; os modos puros convertem os ataques do outro tipo, senão
+     * o preset rítmico reintroduziria a textura desligada. O silêncio (NONE) é
+     * sempre preservado.
+     */
+    private AttackType effectiveAttack(AttackType attack) {
+        if (attack == AttackType.NONE) {
+            return attack;
+        }
+        GuitarArticulation articulation = config.getArticulation();
+        if (articulation.usesStrum() && !articulation.usesPick()) {
+            return attack == AttackType.PICK ? AttackType.STRUM_DOWN : attack;
+        }
+        if (articulation.usesPick() && !articulation.usesStrum()) {
+            return AttackType.PICK;
+        }
+        return attack;
     }
 
     /** Batida: notas em sequência, graves primeiro (down) ou agudos primeiro (up). */
