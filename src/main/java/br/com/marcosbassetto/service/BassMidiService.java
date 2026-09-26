@@ -89,6 +89,13 @@ public class BassMidiService {
             int seventh = VoicingService.bassSeventh(root, rawNotes, config.getRegister());
             int octave = VoicingService.bassOctave(root, config.getRegister());
 
+            // Aproximação cromática: depende do PRÓXIMO acorde, por isso é
+            // resolvida aqui e não no padrão.
+            String nextSymbol = chords[(chordIndex + 1) % chords.length];
+            int nextRoot = VoicingService.forBass(
+                    chordService.getMidiNotes(nextSymbol), config.getRegister()).get(0);
+            int approach = VoicingService.bassApproach(nextRoot, config.getRegister());
+
             for (int step = 0; step < pattern.getTotalSteps(); step++) {
                 BassRhythmPattern.BassNoteType type = pattern.getNoteType(step);
                 if (type == BassRhythmPattern.BassNoteType.NONE) {
@@ -107,6 +114,7 @@ public class BassMidiService {
                     case SIXTH -> sixth;
                     case SEVENTH -> seventh;
                     case OCTAVE -> octave;
+                    case APPROACH -> approach;
                     case NONE -> root;
                 };
 
@@ -130,7 +138,7 @@ public class BassMidiService {
             case THIRD -> 1;
             case FIFTH -> 2;
             case SIXTH, SEVENTH -> 3;
-            case OCTAVE, NONE -> 4;
+            case APPROACH, OCTAVE, NONE -> 4;
         };
     }
 

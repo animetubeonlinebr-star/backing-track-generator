@@ -215,6 +215,27 @@ class VoicingServiceTest {
     }
 
     @Test
+    void bassApproachIsChromaticAndStaysInRegister() {
+        for (int nextRoot = VoicingService.BASS_LOW; nextRoot <= VoicingService.BASS_HIGH; nextRoot++) {
+            int approach = VoicingService.bassApproach(nextRoot);
+            assertTrue(approach >= VoicingService.BASS_LOW && approach <= VoicingService.BASS_HIGH,
+                    "aproximacao " + approach + " sai do registro (destino " + nextRoot + ")");
+            int delta = Math.abs(approach - nextRoot);
+            assertTrue(delta == 1 || delta == 0,
+                    "aproximacao deve ser semitom (ou repetir o destino), foi " + delta);
+        }
+    }
+
+    @Test
+    void bassApproachPrefersTheSemitoneBelow() {
+        // E1 = 28 é o piso: a entrada por baixo cairia em 27, fora da região,
+        // então sobe. Nos destinos interiores a entrada é sempre por baixo.
+        assertEquals(35, VoicingService.bassApproach(36), "C2 entra por baixo (B1)");
+        assertEquals(42, VoicingService.bassApproach(43), "G2 entra por baixo (F#2)");
+        assertEquals(29, VoicingService.bassApproach(28), "piso entra por cima (F1)");
+    }
+
+    @Test
     void bassDerivedHighStaysBelowGuitarVoicings() {
         // O teto derivado é o topo do registro do baixo; nas regiões de
         // referência ele apenas TOCA o piso da guitarra (43), a mesma fronteira

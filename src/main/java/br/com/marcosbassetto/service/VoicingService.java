@@ -122,6 +122,28 @@ public final class VoicingService {
     }
 
     /**
+     * Aproximação cromática à fundamental do próximo acorde. Prefere entrar por
+     * baixo (meio tom abaixo), que é a condução mais forte do walking; se isso
+     * cair fora da região do baixo, tenta por cima. Nunca sai do registro —
+     * quando nenhuma das duas cabe, repete a própria fundamental de destino.
+     */
+    public static int bassApproach(int nextRoot) {
+        return bassApproach(nextRoot, Register.BASS);
+    }
+
+    public static int bassApproach(int nextRoot, Register register) {
+        int below = nextRoot - 1;
+        if (below >= register.low() && below <= register.high()) {
+            return below;
+        }
+        int above = nextRoot + 1;
+        if (above >= register.low() && above <= register.high()) {
+            return above;
+        }
+        return foldInto(nextRoot, register.low(), register.high());
+    }
+
+    /**
      * Terça/sexta como tom do acorde: parte do intervalo maior e, se esse tom
      * não existir no acorde mas o menor existir, usa o menor.
      */

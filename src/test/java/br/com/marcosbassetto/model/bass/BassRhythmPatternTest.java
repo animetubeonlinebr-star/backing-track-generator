@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -230,5 +231,53 @@ class BassRhythmPatternTest {
         assertEquals(BassNoteType.FIFTH, p.getNoteType(2), "contratempo do tempo 1");
         assertEquals(BassNoteType.ROOT, p.getNoteType(4));
         assertEquals(BassNoteType.FIFTH, p.getNoteType(6), "contratempo do tempo 2");
+    }
+
+    /** Walking jazz: uma nota por tempo, com a aproximação no último. */
+    @Test
+    void jazzWalksOneNotePerBeatAndApproachesOnTheLast() {
+        BassRhythmPattern p = preset("4/4", BassRhythmPattern.PRESET_JAZZ);
+
+        assertEquals(BassNoteType.ROOT, p.getNoteType(0));
+        assertEquals(BassNoteType.THIRD, p.getNoteType(4));
+        assertEquals(BassNoteType.FIFTH, p.getNoteType(8));
+        assertEquals(BassNoteType.APPROACH, p.getNoteType(12), "ultimo tempo aproxima");
+
+        assertEquals(4, grid(p).stream().filter(t -> t != BassNoteType.NONE).count(),
+                "uma nota por tempo");
+        assertEquals(1, grid(p).stream().filter(t -> t == BassNoteType.APPROACH).count(),
+                "exatamente uma aproximacao por compasso");
+    }
+
+    /** Em 3/4 o walking encolhe para R-T-A sem sair do compasso. */
+    @Test
+    void jazzWalkingAdaptsToOddMeters() {
+        BassRhythmPattern threeFour = preset("3/4", BassRhythmPattern.PRESET_JAZZ);
+        assertEquals(BassNoteType.ROOT, threeFour.getNoteType(0));
+        assertEquals(BassNoteType.THIRD, threeFour.getNoteType(4));
+        assertEquals(BassNoteType.APPROACH, threeFour.getNoteType(8));
+        assertEquals(3, grid(threeFour).stream().filter(t -> t != BassNoteType.NONE).count());
+
+        BassRhythmPattern twoFour = preset("2/4", BassRhythmPattern.PRESET_JAZZ);
+        assertEquals(BassNoteType.ROOT, twoFour.getNoteType(0));
+        assertEquals(BassNoteType.APPROACH, twoFour.getNoteType(4));
+
+        // 6/8 é composto: 2 pulsos x 6 passos, aproximação no passo 6.
+        BassRhythmPattern sixEight = preset("6/8", BassRhythmPattern.PRESET_JAZZ);
+        assertEquals(BassNoteType.ROOT, sixEight.getNoteType(0));
+        assertEquals(BassNoteType.APPROACH, sixEight.getNoteType(6));
+    }
+
+    /** O walking jazz não pode ser uma cópia do walking blues. */
+    @Test
+    void jazzWalkingDiffersFromWalkingBlues() {
+        BassRhythmPattern jazz = preset("4/4", BassRhythmPattern.PRESET_JAZZ);
+        BassRhythmPattern blues = preset("4/4", BassRhythmPattern.PRESET_WALKING_BLUES);
+
+        assertEquals(1, grid(jazz).stream().filter(t -> t == BassNoteType.APPROACH).count(),
+                "jazz tem aproximacao cromatica");
+        assertEquals(0, grid(blues).stream().filter(t -> t == BassNoteType.APPROACH).count(),
+                "blues nao usa aproximacao");
+        assertNotEquals(grid(blues), grid(jazz));
     }
 }

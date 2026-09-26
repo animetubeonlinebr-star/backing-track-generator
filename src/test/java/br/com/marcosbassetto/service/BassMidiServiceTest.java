@@ -218,6 +218,69 @@ class BassMidiServiceTest {
         assertTrue(secondMeasure.stream().allMatch(n -> n % 12 == 7), "compasso 2 = G");
     }
 
+    /**
+     * O walking jazz precisa realmente resolver a aproximação cromática: no
+     * último tempo do compasso a nota tem de ser um semitom da fundamental do
+     * PRÓXIMO acorde. Sem isso o preset seria só um walking blues com outro nome.
+     */
+    @Test
+    void jazzApproachLandsOneSemitoneBelowTheNextRoot() throws Exception {
+        Track t = generate(track("C - Am - Dm - G7", "4/4"),
+                BassRhythmPattern.PRESET_JAZZ, 7680);
+
+        List<NoteOn> ons = noteOns(t);
+        assertEquals(16, ons.size(), "4 compassos x 4 tempos");
+
+        // Fundamental de cada compasso e a aproximação gravada no compasso anterior.
+        List<NoteOn> downbeats = new ArrayList<>();
+        for (NoteOn note : ons) {
+            if (note.tick() % 1920 == 0) {
+                downbeats.add(note);
+            }
+        }
+        assertEquals(4, downbeats.size());
+
+        for (int measure = 0; measure < 4; measure++) {
+            NoteOn approach = ons.get((measure * 4) + 3);
+            int nextRoot = downbeats.get((measure + 1) % downbeats.size()).note();
+            assertEquals(1, Math.floorMod(nextRoot - approach.note(), 12),
+                    "aproximacao no fim do compasso " + (measure + 1)
+                            + " deve estar um semitom abaixo da fundamental seguinte");
+        }
+    }
+
+    /** A aproximação nunca sai da região do baixo, nem na fronteira do registro. */
+    @Test
+    void jazzApproachStaysInBassRegion() throws Exception {
+        for (String chord : new String[]{"E", "F", "G", "A", "Bb", "B", "C", "D"}) {
+            Track t = generate(track(chord + " - C", "4/4"),
+                    BassRhythmPattern.PRESET_JAZZ, 3840);
+            for (NoteOn note : noteOns(t)) {
+                assertTrue(note.note() >= VoicingService.BASS_LOW
+                                && note.note() <= VoicingService.BASS_DERIVED_HIGH,
+                        chord + ": aproximacao " + note.note() + " sai da regiao do baixo");
+            }
+        }
+    }
+
+    /** A progressão circular: o último compasso aproxima o primeiro acorde. */
+    @Test
+    void jazzApproachWrapsAroundTheProgression() throws Exception {
+        Track t = generate(track("C - F", "4/4"), BassRhythmPattern.PRESET_JAZZ, 3840);
+        List<NoteOn> ons = noteOns(t);
+
+        assertEquals(8, ons.size(), "2 compassos x 4 tempos");
+        NoteOn lastOfFirst = ons.get(3);
+        NoteOn secondRoot = ons.get(4);
+        assertEquals(1, Math.floorMod(secondRoot.note() - lastOfFirst.note(), 12),
+                "compasso 1 aproxima o C do compasso 2 (F)");
+
+        NoteOn lastOfSecond = ons.get(7);
+        NoteOn firstRoot = ons.get(0);
+        assertEquals(1, Math.floorMod(firstRoot.note() - lastOfSecond.note(), 12),
+                "compasso 2 aproxima o C de volta, fechando o ciclo");
+    }
+
     @Test
     void oddMetersGenerateWithoutError() throws Exception {
         for (String sig : new String[]{"3/4", "5/4", "6/8", "7/8", "12/8"}) {

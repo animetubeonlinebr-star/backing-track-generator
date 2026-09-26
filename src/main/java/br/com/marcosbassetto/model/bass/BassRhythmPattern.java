@@ -14,13 +14,17 @@ import java.util.Arrays;
 public class BassRhythmPattern {
 
     public enum BassNoteType {
-        NONE,   // silêncio
-        ROOT,   // fundamental
-        THIRD,  // terça (+4 semitons; aceita a terça menor se o acorde pedir)
-        FIFTH,  // quinta (+7 semitons)
-        SIXTH,  // sexta (+9 semitons) — passagem
-        SEVENTH,// sétima (+10 semitons) — passagem
-        OCTAVE  // oitava (+12 semitons)
+        NONE,     // silêncio
+        ROOT,     // fundamental
+        THIRD,    // terça (+4 semitons; aceita a terça menor se o acorde pedir)
+        FIFTH,    // quinta (+7 semitons)
+        SIXTH,    // sexta (+9 semitons) — passagem
+        SEVENTH,  // sétima (+10 semitons) — passagem
+        OCTAVE,   // oitava (+12 semitons)
+        // Aproximação cromática à fundamental do PRÓXIMO acorde. O padrão só
+        // marca a posição; a nota é resolvida no serviço, que é quem conhece a
+        // progressão. É o que dá o movimento do walking jazz.
+        APPROACH
     }
 
     public static final String PRESET_FUNDAMENTAL_SIMPLES = "FUNDAMENTAL_SIMPLES";
@@ -177,7 +181,7 @@ public class BassRhythmPattern {
             }
             case PRESET_JAZZ -> {
                 appliedPreset = PRESET_JAZZ;
-                applyWalkingBlues(info);
+                applyJazzWalking(info);
             }
             case PRESET_ROCK -> {
                 appliedPreset = PRESET_ROCK;
@@ -309,6 +313,38 @@ public class BassRhythmPattern {
             int step = beat * spb;
             setNoteType(step, BassNoteType.ROOT);
             setNoteType(step + offBeat, BassNoteType.FIFTH);
+        }
+    }
+
+    /**
+     * Walking jazz: uma nota por tempo, percorrendo o acorde (fundamental,
+     * terça, quinta, sétima) e resolvendo o ÚLTIMO tempo numa aproximação
+     * cromática à fundamental do próximo acorde — o cromatismo que define o
+     * walking. A nota da aproximação é resolvida no serviço, que conhece a
+     * progressão; aqui só marcamos a posição.
+     *
+     * <p>Com 4 tempos: R T F A (a aproximação ocupa o 4º). Em compassos de 2
+     * tempos, R e aproximação. Em 3, R T e aproximação.
+     */
+    private void applyJazzWalking(TimeSignatureInfo info) {
+        if (info == null) {
+            return;
+        }
+        int spb = info.stepsPerBeat();
+        int beats = info.beatsPerMeasure();
+
+        if (beats <= 0) {
+            return;
+        }
+
+        // Último tempo sempre aproxima o próximo acorde.
+        setNoteType((beats - 1) * spb, BassNoteType.APPROACH);
+
+        // Os tempos anteriores percorrem o acorde, sem repetir a fundamental.
+        BassNoteType[] cycle = {BassNoteType.ROOT, BassNoteType.THIRD,
+                BassNoteType.FIFTH, BassNoteType.SEVENTH};
+        for (int beat = 0; beat < beats - 1; beat++) {
+            setNoteType(beat * spb, cycle[beat % cycle.length]);
         }
     }
 
