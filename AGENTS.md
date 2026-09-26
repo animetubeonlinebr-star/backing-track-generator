@@ -39,9 +39,11 @@ Layers under `src/main/java/br/com/marcosbassetto`:
 
 ## Rhythm as a pattern (not per-note expression)
 For backing tracks each instrument is defined by WHEN and WHAT it plays, not HOW each note is expressed. There is deliberately no pitch bend / vibrato / slide / slap.
-- `GuitarRhythmPattern` is a per-step `AttackType` grid: `STRUM_DOWN`, `STRUM_UP`, `PICK`, `NONE`. Presets: `BATIDA_BASICA`, `BATIDA_BALADA`, `BATIDA_ROCK`, `DEDILHADO`, `REGGAE`, `BLUES` (shuffle), `BOSSA_NOVA` (sincopado).
-- `BassRhythmPattern` is a per-step `BassNoteType` grid: `NONE`, `ROOT`, `THIRD`, `FIFTH`, `SIXTH`, `SEVENTH`, `OCTAVE`. Presets: `FUNDAMENTAL_SIMPLES`, `FUNDAMENTAL_E_QUINTA`, `CAMINHANTE`, `REGGAE`, `BLUES_SHUFFLE`, `WALKING_BLUES`. The guitar only decides "hit or not"; the bass also decides *which chord degree* — that is the key difference.
-- `KeyboardRhythmPattern` is a per-step `AttackType` grid: `NONE`, `BLOCK`, `ARP_UP`, `ARP_DOWN`. Presets: `PAD_SUSTENTADO`, `BLOCO_RITMICO`, `ARPEJO_UP`, `ARPEJO_DOWN`, `BOSSA_NOVA`, `REGGAE` (skank, só contratempo).
+- `GuitarRhythmPattern` is a per-step `AttackType` grid: `STRUM_DOWN`, `STRUM_UP`, `PICK`, `NONE`. Style presets: `BLUES`, `BOSSA_NOVA`, `JAZZ`, `REGGAE`, `ROCK`; generic presets: `BATIDA_BASICA`, `BATIDA_BALADA`, `BATIDA_ROCK`, `DEDILHADO`.
+- `BassRhythmPattern` is a per-step `BassNoteType` grid: `NONE`, `ROOT`, `THIRD`, `FIFTH`, `SIXTH`, `SEVENTH`, `OCTAVE`. Style presets: `BLUES`, `BOSSA_NOVA`, `JAZZ`, `REGGAE`, `ROCK`; generic presets: `FUNDAMENTAL_SIMPLES`, `FUNDAMENTAL_E_QUINTA`, `CAMINHANTE`, `BLUES_SHUFFLE`, `WALKING_BLUES`. The guitar only decides "hit or not"; the bass also decides *which chord degree* — that is the key difference.
+- `KeyboardRhythmPattern` is a per-step `AttackType` grid: `NONE`, `BLOCK`, `ARP_UP`, `ARP_DOWN`. Style presets: `BLUES`, `BOSSA_NOVA`, `JAZZ`, `REGGAE`, `ROCK`; generic presets: `PAD_SUSTENTADO`, `BLOCO_RITMICO`, `ARPEJO_UP`, `ARPEJO_DOWN`.
+- Each pattern class exposes `STYLE_PRESETS`/`STYLE_LABELS` (the five styles, in menu order), `GENERIC_PRESETS`, `ALL_PRESETS`, and the pair `menuItems()`/`presetForMenuItem()`/`menuItemForPreset()` that translates between the friendly label shown in the "Padrão rítmico" dropdown and the preset name. A style is never also a generic preset, so every menu item resolves to exactly one preset; a test enforces no duplicate labels.
+- `StylePreset` points at the style-named presets (`PRESET_BLUES`, …) for all three instruments, so choosing a style in the main menu and choosing it in an instrument's dropdown apply the same groove. Each style yields a distinct grid per instrument (asserted in `StylePresetTest`).
 - Patterns are independent of the chord, so swapping the progression keeps the groove.
 - Both rhythm patterns follow the same safety rules: constructor fills with NONE, `setX` bounds-checks, and presets are written relative to `beatsPerMeasure()`/`stepsPerBeat()` so any meter works.
 

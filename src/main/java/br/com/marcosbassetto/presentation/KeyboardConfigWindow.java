@@ -50,8 +50,9 @@ public class KeyboardConfigWindow extends JDialog {
         this.config = config;
         this.timeInfo = timeInfo;
 
-        comboPreset = new JComboBox<>(KeyboardRhythmPattern.ALL_PRESETS);
-        comboPreset.setSelectedItem(config.getPattern().getAppliedPreset());
+        comboPreset = new JComboBox<>(KeyboardRhythmPattern.menuItems());
+        comboPreset.setSelectedItem(
+                KeyboardRhythmPattern.menuItemForPreset(config.getPattern().getAppliedPreset()));
 
         comboProgram = new JComboBox<>(PROGRAM_NAMES);
         comboProgram.setSelectedIndex(findProgramIndex(config.getProgramChange()));
@@ -171,9 +172,9 @@ public class KeyboardConfigWindow extends JDialog {
         config.setSustainEnabled(chkSustain.isSelected());
         config.setProgramChange(extractProgram((String) comboProgram.getSelectedItem()));
 
-        String preset = (String) comboPreset.getSelectedItem();
-        if (preset != null) {
-            config.applyPreset(preset, timeInfo);
+        String item = (String) comboPreset.getSelectedItem();
+        if (item != null) {
+            config.applyPreset(KeyboardRhythmPattern.presetForMenuItem(item), timeInfo);
         }
 
         saved = true;

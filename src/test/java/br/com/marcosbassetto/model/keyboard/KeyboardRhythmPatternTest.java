@@ -186,4 +186,53 @@ class KeyboardRhythmPatternTest {
         assertEquals(0, count(p, AttackType.ARP_DOWN));
         assertTrue(grid(p).stream().allMatch(t -> t == AttackType.NONE));
     }
+
+    /** O menu oferece os cinco estilos, sem repetir nenhum nome. */
+    @Test
+    void menuOffersEveryStyleWithoutDuplicates() {
+        String[] items = KeyboardRhythmPattern.menuItems();
+        assertEquals(KeyboardRhythmPattern.STYLE_LABELS.length
+                        + KeyboardRhythmPattern.GENERIC_PRESETS.length, items.length);
+        assertEquals(items.length, java.util.Arrays.stream(items).distinct().count(),
+                "o menu nao pode repetir um nome");
+        for (String style : KeyboardRhythmPattern.STYLE_LABELS) {
+            assertTrue(java.util.Arrays.asList(items).contains(style),
+                    "faltou o estilo " + style + " no menu");
+        }
+    }
+
+    /** Cada estilo do menu resolve de volta para um preset proprio. */
+    @Test
+    void everyStyleResolvesToItsOwnPreset() {
+        for (int i = 0; i < KeyboardRhythmPattern.STYLE_LABELS.length; i++) {
+            String label = KeyboardRhythmPattern.STYLE_LABELS[i];
+            String preset = KeyboardRhythmPattern.STYLE_PRESETS[i];
+            assertEquals(preset, KeyboardRhythmPattern.presetForMenuItem(label));
+            assertEquals(label, KeyboardRhythmPattern.menuItemForPreset(preset),
+                    "o rotulo do menu deve voltar igual");
+        }
+    }
+
+    /** Cada estilo gera uma levada de teclado distinta em 4/4. */
+    @Test
+    void eachStyleProducesADistinctGrid() {
+        java.util.Set<String> grids = new java.util.HashSet<>();
+
+        for (String stylePreset : KeyboardRhythmPattern.STYLE_PRESETS) {
+            KeyboardRhythmPattern p = preset("4/4", stylePreset);
+            assertTrue(grids.add(grid(p).toString()),
+                    stylePreset + " repete a levada de outro estilo");
+        }
+
+        assertEquals(KeyboardRhythmPattern.STYLE_PRESETS.length, grids.size());
+    }
+
+    @Test
+    void rockBlocksOnEveryBeat() {
+        KeyboardRhythmPattern p = preset("4/4", KeyboardRhythmPattern.PRESET_ROCK);
+        for (int beat = 0; beat < 4; beat++) {
+            assertEquals(AttackType.BLOCK, p.getAttack(beat * 4), "tempo " + (beat + 1));
+        }
+        assertEquals(4, count(p, AttackType.BLOCK));
+    }
 }

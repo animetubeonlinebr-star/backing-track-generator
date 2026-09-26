@@ -17,19 +17,12 @@ import java.awt.*;
  */
 public class GuitarConfigWindow extends JDialog {
 
-    private static final String[] PRESETS = {
-            GuitarRhythmPattern.PRESET_BATIDA_BASICA,
-            GuitarRhythmPattern.PRESET_BATIDA_BALADA,
-            GuitarRhythmPattern.PRESET_BATIDA_ROCK,
-            GuitarRhythmPattern.PRESET_DEDILHADO,
-            GuitarRhythmPattern.PRESET_REGGAE
-    };
-
     private final GuitarConfig config;
     private final TimeSignatureInfo timeInfo;
     private final Runnable onSaveCallback;
 
-    private final JComboBox<String> cmbPreset = new JComboBox<>(PRESETS);
+    private final JComboBox<String> cmbPreset =
+            new JComboBox<>(GuitarRhythmPattern.menuItems());
     private final JComboBox<GuitarArticulation> cmbArticulation =
             new JComboBox<>(GuitarArticulation.values());
     private final JSpinner spnStrumOffset = new JSpinner(new SpinnerNumberModel(15, 0, 60, 1));
@@ -79,7 +72,7 @@ public class GuitarConfigWindow extends JDialog {
     }
 
     private void loadFromConfig() {
-        cmbPreset.setSelectedItem(config.getPreset());
+        cmbPreset.setSelectedItem(GuitarRhythmPattern.menuItemForPreset(config.getPreset()));
         cmbArticulation.setSelectedItem(config.getArticulation());
         spnStrumOffset.setValue(config.getStrumOffsetTicks());
         cmbIntensity.setSelectedItem(config.getIntensity());
@@ -87,8 +80,8 @@ public class GuitarConfigWindow extends JDialog {
     }
 
     private void saveAndClose() {
-        String preset = (String) cmbPreset.getSelectedItem();
-        config.setPreset(preset);
+        String item = (String) cmbPreset.getSelectedItem();
+        config.setPreset(GuitarRhythmPattern.presetForMenuItem(item));
         config.setArticulation((GuitarArticulation) cmbArticulation.getSelectedItem());
         config.setStrumOffsetTicks((int) spnStrumOffset.getValue());
         config.setIntensity((Intensity) cmbIntensity.getSelectedItem());

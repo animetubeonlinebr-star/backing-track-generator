@@ -24,16 +24,46 @@ public class KeyboardRhythmPattern {
     public static final String PRESET_BLOCO_RITMICO = "BLOCO_RITMICO";
     public static final String PRESET_ARPEJO_UP = "ARPEJO_UP";
     public static final String PRESET_ARPEJO_DOWN = "ARPEJO_DOWN";
+
+    /** Presets por estilo: um para cada estilo do menu PRESETS. */
+    public static final String PRESET_BLUES = "BLUES";
     public static final String PRESET_BOSSA_NOVA = "BOSSA_NOVA";
+    public static final String PRESET_JAZZ = "JAZZ";
     public static final String PRESET_REGGAE = "REGGAE";
+    public static final String PRESET_ROCK = "ROCK";
 
     public static final String[] ALL_PRESETS = {
             PRESET_PAD_SUSTENTADO,
             PRESET_BLOCO_RITMICO,
             PRESET_ARPEJO_UP,
             PRESET_ARPEJO_DOWN,
+            PRESET_BLUES,
             PRESET_BOSSA_NOVA,
-            PRESET_REGGAE
+            PRESET_JAZZ,
+            PRESET_REGGAE,
+            PRESET_ROCK
+    };
+
+    /** Presets genéricos, sem vínculo com um estilo. */
+    public static final String[] GENERIC_PRESETS = {
+            PRESET_PAD_SUSTENTADO,
+            PRESET_BLOCO_RITMICO,
+            PRESET_ARPEJO_UP,
+            PRESET_ARPEJO_DOWN
+    };
+
+    /** Estilos, na ordem em que aparecem no menu PRESETS. */
+    public static final String[] STYLE_PRESETS = {
+            PRESET_BLUES,
+            PRESET_BOSSA_NOVA,
+            PRESET_JAZZ,
+            PRESET_REGGAE,
+            PRESET_ROCK
+    };
+
+    /** Rótulos amigáveis dos estilos, na mesma ordem de {@link #STYLE_PRESETS}. */
+    public static final String[] STYLE_LABELS = {
+            "Blues", "Bossa Nova", "Jazz", "Reggae", "Rock"
     };
 
     private AttackType[] steps;
@@ -130,11 +160,55 @@ public class KeyboardRhythmPattern {
                 appliedPreset = PRESET_REGGAE;
                 applyReggae(info);
             }
+            case PRESET_BLUES -> {
+                appliedPreset = PRESET_BLUES;
+                applyBlues(info);
+            }
+            case PRESET_JAZZ -> {
+                appliedPreset = PRESET_JAZZ;
+                applyJazz(info);
+            }
+            case PRESET_ROCK -> {
+                appliedPreset = PRESET_ROCK;
+                applyRock(info);
+            }
             default -> {
                 appliedPreset = PRESET_PAD_SUSTENTADO;
                 applyPadSustentado(info);
             }
         }
+    }
+
+    /**
+     * Opções do menu "Padrão rítmico": os estilos primeiro, seguidos dos presets
+     * genéricos. Um estilo nunca repete um nome genérico, então a escolha do
+     * usuário é sempre resolvível de volta para um único preset.
+     */
+    public static String[] menuItems() {
+        String[] items = new String[STYLE_LABELS.length + GENERIC_PRESETS.length];
+        System.arraycopy(STYLE_LABELS, 0, items, 0, STYLE_LABELS.length);
+        System.arraycopy(GENERIC_PRESETS, 0, items, STYLE_LABELS.length, GENERIC_PRESETS.length);
+        return items;
+    }
+
+    /** Traduz o item exibido no menu para o nome do preset. */
+    public static String presetForMenuItem(String item) {
+        for (int i = 0; i < STYLE_LABELS.length; i++) {
+            if (STYLE_LABELS[i].equals(item)) {
+                return STYLE_PRESETS[i];
+            }
+        }
+        return item;
+    }
+
+    /** Traduz o preset atual para o item exibido no menu (rótulo do estilo). */
+    public static String menuItemForPreset(String preset) {
+        for (int i = 0; i < STYLE_PRESETS.length; i++) {
+            if (STYLE_PRESETS[i].equals(preset)) {
+                return STYLE_LABELS[i];
+            }
+        }
+        return preset;
     }
 
     /** BLOCK no tempo 1. O serviço segura o acorde (com sustain) até o fim do compasso. */
@@ -215,6 +289,49 @@ public class KeyboardRhythmPattern {
         int spb = info.stepsPerBeat();
         for (int beat = 0; beat < info.beatsPerMeasure(); beat++) {
             setAttack(beat * spb + (spb / 2), AttackType.BLOCK);
+        }
+    }
+
+    /**
+     * Blues: acordes em bloco no shuffle. Bloco na cabeça do tempo e no repique
+     * da tercina — o mesmo galope da guitarra e do baixo, agora na harmonia.
+     */
+    private void applyBlues(TimeSignatureInfo info) {
+        if (info == null) {
+            return;
+        }
+        int spb = info.stepsPerBeat();
+        for (int beat = 0; beat < info.beatsPerMeasure(); beat++) {
+            int beatStep = beat * spb;
+            setAttack(beatStep, AttackType.BLOCK);
+            setAttack(beatStep + ((2 * spb) / 3), AttackType.BLOCK);
+        }
+    }
+
+    /** Jazz: arpejo ascendente com síncope no contratempo do tempo 2. */
+    private void applyJazz(TimeSignatureInfo info) {
+        if (info == null) {
+            return;
+        }
+        int spb = info.stepsPerBeat();
+        int beats = info.beatsPerMeasure();
+
+        for (int beat = 0; beat < beats; beat++) {
+            setAttack(beat * spb, AttackType.ARP_UP);
+        }
+        if (beats >= 2) {
+            setAttack(spb / 2, AttackType.BLOCK);
+        }
+    }
+
+    /** Rock: bloco em todos os tempos, a marca da levada pesada. */
+    private void applyRock(TimeSignatureInfo info) {
+        if (info == null) {
+            return;
+        }
+        int spb = info.stepsPerBeat();
+        for (int beat = 0; beat < info.beatsPerMeasure(); beat++) {
+            setAttack(beat * spb, AttackType.BLOCK);
         }
     }
 }

@@ -30,13 +30,46 @@ public class BassRhythmPattern {
     public static final String PRESET_BLUES_SHUFFLE = "BLUES_SHUFFLE";
     public static final String PRESET_WALKING_BLUES = "WALKING_BLUES";
 
+    /** Presets por estilo: um para cada estilo do menu PRESETS. */
+    public static final String PRESET_BLUES = "BLUES";
+    public static final String PRESET_BOSSA_NOVA = "BOSSA_NOVA";
+    public static final String PRESET_JAZZ = "JAZZ";
+    public static final String PRESET_ROCK = "ROCK";
+
+    /** Presets genéricos, sem vínculo com um estilo. */
+    public static final String[] GENERIC_PRESETS = {
+            PRESET_FUNDAMENTAL_SIMPLES,
+            PRESET_FUNDAMENTAL_E_QUINTA,
+            PRESET_CAMINHANTE,
+            PRESET_BLUES_SHUFFLE,
+            PRESET_WALKING_BLUES
+    };
+
     public static final String[] ALL_PRESETS = {
             PRESET_FUNDAMENTAL_SIMPLES,
             PRESET_FUNDAMENTAL_E_QUINTA,
             PRESET_CAMINHANTE,
             PRESET_REGGAE,
             PRESET_BLUES_SHUFFLE,
-            PRESET_WALKING_BLUES
+            PRESET_WALKING_BLUES,
+            PRESET_BLUES,
+            PRESET_BOSSA_NOVA,
+            PRESET_JAZZ,
+            PRESET_ROCK
+    };
+
+    /** Estilos, na ordem em que aparecem no menu PRESETS. */
+    public static final String[] STYLE_PRESETS = {
+            PRESET_BLUES,
+            PRESET_BOSSA_NOVA,
+            PRESET_JAZZ,
+            PRESET_REGGAE,
+            PRESET_ROCK
+    };
+
+    /** Rótulos amigáveis dos estilos, na mesma ordem de {@link #STYLE_PRESETS}. */
+    public static final String[] STYLE_LABELS = {
+            "Blues", "Bossa Nova", "Jazz", "Reggae", "Rock"
     };
 
     private BassNoteType[] steps;
@@ -134,11 +167,59 @@ public class BassRhythmPattern {
                 appliedPreset = PRESET_WALKING_BLUES;
                 applyWalkingBlues(info);
             }
+            case PRESET_BLUES -> {
+                appliedPreset = PRESET_BLUES;
+                applyBluesShuffle(info);
+            }
+            case PRESET_BOSSA_NOVA -> {
+                appliedPreset = PRESET_BOSSA_NOVA;
+                applyBossaNova(info);
+            }
+            case PRESET_JAZZ -> {
+                appliedPreset = PRESET_JAZZ;
+                applyWalkingBlues(info);
+            }
+            case PRESET_ROCK -> {
+                appliedPreset = PRESET_ROCK;
+                applyFundamentalSimples(info);
+            }
             default -> {
                 appliedPreset = PRESET_FUNDAMENTAL_SIMPLES;
                 applyFundamentalSimples(info);
             }
         }
+    }
+
+    /**
+     * Opções do menu "Padrão rítmico": os estilos primeiro, seguidos dos presets
+     * genéricos. Um estilo nunca repete um nome genérico, então a escolha do
+     * usuário é sempre resolvível de volta para um único preset.
+     */
+    public static String[] menuItems() {
+        String[] items = new String[STYLE_LABELS.length + GENERIC_PRESETS.length];
+        System.arraycopy(STYLE_LABELS, 0, items, 0, STYLE_LABELS.length);
+        System.arraycopy(GENERIC_PRESETS, 0, items, STYLE_LABELS.length, GENERIC_PRESETS.length);
+        return items;
+    }
+
+    /** Traduz o item exibido no menu para o nome do preset. */
+    public static String presetForMenuItem(String item) {
+        for (int i = 0; i < STYLE_LABELS.length; i++) {
+            if (STYLE_LABELS[i].equals(item)) {
+                return STYLE_PRESETS[i];
+            }
+        }
+        return item;
+    }
+
+    /** Traduz o preset atual para o item exibido no menu (rótulo do estilo). */
+    public static String menuItemForPreset(String preset) {
+        for (int i = 0; i < STYLE_PRESETS.length; i++) {
+            if (STYLE_PRESETS[i].equals(preset)) {
+                return STYLE_LABELS[i];
+            }
+        }
+        return preset;
     }
 
     /** Fundamental em cada tempo. 4/4 → R . . . R . . . R . . . R . . . */
@@ -210,6 +291,24 @@ public class BassRhythmPattern {
             int beatStep = beat * spb;
             setNoteType(beatStep, BassNoteType.ROOT);
             setNoteType(beatStep + (spb / 3), BassNoteType.FIFTH);
+        }
+    }
+
+    /**
+     * Bossa Nova: fundamental na cabeça do tempo e a quinta no contratempo,
+     * criando o balanço sincopado do estilo. 4/4 → R . . . . . F . R . . . . . F .
+     */
+    private void applyBossaNova(TimeSignatureInfo info) {
+        if (info == null) {
+            return;
+        }
+        int spb = info.stepsPerBeat();
+        int offBeat = spb / 2;
+
+        for (int beat = 0; beat < info.beatsPerMeasure(); beat++) {
+            int step = beat * spb;
+            setNoteType(step, BassNoteType.ROOT);
+            setNoteType(step + offBeat, BassNoteType.FIFTH);
         }
     }
 

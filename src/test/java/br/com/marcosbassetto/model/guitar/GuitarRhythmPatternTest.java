@@ -118,6 +118,65 @@ class GuitarRhythmPatternTest {
         assertEquals(GuitarRhythmPattern.AttackType.STRUM_DOWN, pattern.getAttack(0));
     }
 
+    /** O menu oferece os cinco estilos, sem repetir nenhum nome. */
+    @Test
+    void menuOffersEveryStyleWithoutDuplicates() {
+        String[] items = GuitarRhythmPattern.menuItems();
+        assertEquals(GuitarRhythmPattern.STYLE_LABELS.length
+                        + GuitarRhythmPattern.GENERIC_PRESETS.length, items.length);
+        assertEquals(items.length, java.util.Arrays.stream(items).distinct().count(),
+                "o menu nao pode repetir um nome");
+        for (String style : GuitarRhythmPattern.STYLE_LABELS) {
+            assertTrue(java.util.Arrays.asList(items).contains(style),
+                    "faltou o estilo " + style + " no menu");
+        }
+    }
+
+    /** Cada estilo do menu resolve de volta para um preset proprio. */
+    @Test
+    void everyStyleResolvesToItsOwnPreset() {
+        for (int i = 0; i < GuitarRhythmPattern.STYLE_LABELS.length; i++) {
+            String label = GuitarRhythmPattern.STYLE_LABELS[i];
+            String preset = GuitarRhythmPattern.STYLE_PRESETS[i];
+            assertEquals(preset, GuitarRhythmPattern.presetForMenuItem(label));
+            assertEquals(label, GuitarRhythmPattern.menuItemForPreset(preset),
+                    "o rotulo do menu deve voltar igual");
+        }
+    }
+
+    /** Cada estilo gera um groove distinto em 4/4. */
+    @Test
+    void eachStyleProducesADistinctGrid() {
+        TimeSignatureInfo info = TimeSignatureInfo.parse("4/4");
+        java.util.Set<String> grids = new java.util.HashSet<>();
+
+        for (String preset : GuitarRhythmPattern.STYLE_PRESETS) {
+            GuitarRhythmPattern pattern = new GuitarRhythmPattern(info.totalSteps());
+            pattern.applyPreset(preset, info);
+            StringBuilder fingerprint = new StringBuilder();
+            for (int step = 0; step < pattern.getTotalSteps(); step++) {
+                fingerprint.append(pattern.getAttack(step)).append(',');
+            }
+            assertTrue(grids.add(fingerprint.toString()),
+                    preset + " repete o groove de outro estilo");
+        }
+
+        assertEquals(GuitarRhythmPattern.STYLE_PRESETS.length, grids.size());
+    }
+
+    /** Todo preset, de estilo ou genérico, funciona em qualquer compasso. */
+    @Test
+    void allPresetsWorkInEveryMeter() {
+        for (String sig : new String[]{"2/4", "3/4", "4/4", "5/4", "6/8", "7/8", "12/8", "3/8"}) {
+            TimeSignatureInfo info = TimeSignatureInfo.parse(sig);
+            for (String preset : GuitarRhythmPattern.ALL_PRESETS) {
+                GuitarRhythmPattern pattern = new GuitarRhythmPattern(info.totalSteps());
+                pattern.applyPreset(preset, info);
+                assertEquals(info.totalSteps(), pattern.getTotalSteps(), sig + "/" + preset);
+            }
+        }
+    }
+
     @Test
     void applyPresetWithNullTimeSignatureJustClears() {
         GuitarRhythmPattern pattern = new GuitarRhythmPattern(4);

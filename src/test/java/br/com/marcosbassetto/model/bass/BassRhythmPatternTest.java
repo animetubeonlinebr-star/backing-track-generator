@@ -9,6 +9,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BassRhythmPatternTest {
 
@@ -180,5 +181,54 @@ class BassRhythmPatternTest {
         BassRhythmPattern p = preset("4/4", BassRhythmPattern.PRESET_CAMINHANTE);
         p.clear();
         assertEquals(0, grid(p).stream().filter(t -> t != BassNoteType.NONE).count());
+    }
+
+    /** O menu oferece os cinco estilos, sem repetir nenhum nome. */
+    @Test
+    void menuOffersEveryStyleWithoutDuplicates() {
+        String[] items = BassRhythmPattern.menuItems();
+        assertEquals(BassRhythmPattern.STYLE_LABELS.length
+                        + BassRhythmPattern.GENERIC_PRESETS.length, items.length);
+        assertEquals(items.length, java.util.Arrays.stream(items).distinct().count(),
+                "o menu nao pode repetir um nome");
+        for (String style : BassRhythmPattern.STYLE_LABELS) {
+            assertTrue(java.util.Arrays.asList(items).contains(style),
+                    "faltou o estilo " + style + " no menu");
+        }
+    }
+
+    /** Cada estilo do menu resolve de volta para um preset proprio. */
+    @Test
+    void everyStyleResolvesToItsOwnPreset() {
+        for (int i = 0; i < BassRhythmPattern.STYLE_LABELS.length; i++) {
+            String label = BassRhythmPattern.STYLE_LABELS[i];
+            String preset = BassRhythmPattern.STYLE_PRESETS[i];
+            assertEquals(preset, BassRhythmPattern.presetForMenuItem(label));
+            assertEquals(label, BassRhythmPattern.menuItemForPreset(preset),
+                    "o rotulo do menu deve voltar igual");
+        }
+    }
+
+    /** Cada estilo gera uma linha de baixo distinta em 4/4. */
+    @Test
+    void eachStyleProducesADistinctGrid() {
+        java.util.Set<String> grids = new java.util.HashSet<>();
+
+        for (String stylePreset : BassRhythmPattern.STYLE_PRESETS) {
+            BassRhythmPattern p = preset("4/4", stylePreset);
+            assertTrue(grids.add(grid(p).toString()),
+                    stylePreset + " repete a linha de outro estilo");
+        }
+
+        assertEquals(BassRhythmPattern.STYLE_PRESETS.length, grids.size());
+    }
+
+    @Test
+    void bossaNovaAlternatesRootAndFifthOnTheOffBeat() {
+        BassRhythmPattern p = preset("4/4", BassRhythmPattern.PRESET_BOSSA_NOVA);
+        assertEquals(BassNoteType.ROOT, p.getNoteType(0));
+        assertEquals(BassNoteType.FIFTH, p.getNoteType(2), "contratempo do tempo 1");
+        assertEquals(BassNoteType.ROOT, p.getNoteType(4));
+        assertEquals(BassNoteType.FIFTH, p.getNoteType(6), "contratempo do tempo 2");
     }
 }

@@ -29,8 +29,9 @@ public class BassConfigWindow extends JDialog {
         this.config = config;
         this.timeInfo = timeInfo;
 
-        comboPreset = new JComboBox<>(BassRhythmPattern.ALL_PRESETS);
-        comboPreset.setSelectedItem(config.getPattern().getAppliedPreset());
+        comboPreset = new JComboBox<>(BassRhythmPattern.menuItems());
+        comboPreset.setSelectedItem(
+                BassRhythmPattern.menuItemForPreset(config.getPattern().getAppliedPreset()));
 
         comboIntensity = new JComboBox<>(Intensity.values());
         comboIntensity.setSelectedItem(config.getIntensity());
@@ -130,9 +131,9 @@ public class BassConfigWindow extends JDialog {
         config.setNoteDurationPercent(sliderDuration.getValue());
         config.setProgramChange((int) spinnerProgram.getValue());
 
-        String preset = (String) comboPreset.getSelectedItem();
-        if (preset != null) {
-            config.applyPreset(preset, timeInfo);
+        String item = (String) comboPreset.getSelectedItem();
+        if (item != null) {
+            config.applyPreset(BassRhythmPattern.presetForMenuItem(item), timeInfo);
         }
 
         saved = true;

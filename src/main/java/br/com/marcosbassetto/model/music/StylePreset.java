@@ -26,8 +26,8 @@ public enum StylePreset {
             new Register(43, 64),   // guitarra: G2–E4
             new Register(67, 86),   // teclado: G4–D6 (acima da guitarra)
             GuitarRhythmPattern.PRESET_BLUES,
-            BassRhythmPattern.PRESET_BLUES_SHUFFLE,
-            KeyboardRhythmPattern.PRESET_BLOCO_RITMICO,
+            BassRhythmPattern.PRESET_BLUES,
+            KeyboardRhythmPattern.PRESET_BLUES,
             27, 33, 4),
 
     BOSSA_NOVA("Bossa Nova", "4/4", Intensity.BAIXA,
@@ -35,7 +35,7 @@ public enum StylePreset {
             new Register(45, 64),   // guitarra começa acima do teto do baixo
             new Register(65, 84),
             GuitarRhythmPattern.PRESET_BOSSA_NOVA,
-            BassRhythmPattern.PRESET_FUNDAMENTAL_E_QUINTA,
+            BassRhythmPattern.PRESET_BOSSA_NOVA,
             KeyboardRhythmPattern.PRESET_BOSSA_NOVA,
             24, 32, 4),
 
@@ -43,9 +43,9 @@ public enum StylePreset {
             new Register(28, 40),
             new Register(43, 64),
             new Register(65, 86),
-            GuitarRhythmPattern.PRESET_DEDILHADO,
-            BassRhythmPattern.PRESET_CAMINHANTE,
-            KeyboardRhythmPattern.PRESET_ARPEJO_UP,
+            GuitarRhythmPattern.PRESET_JAZZ,
+            BassRhythmPattern.PRESET_JAZZ,
+            KeyboardRhythmPattern.PRESET_JAZZ,
             26, 32, 0),
 
     REGGAE("Reggae", "4/4", Intensity.MEDIA,
@@ -61,9 +61,9 @@ public enum StylePreset {
             new Register(28, 40),
             new Register(43, 64),
             new Register(65, 86),
-            GuitarRhythmPattern.PRESET_BATIDA_ROCK,
-            BassRhythmPattern.PRESET_FUNDAMENTAL_SIMPLES,
-            KeyboardRhythmPattern.PRESET_PAD_SUSTENTADO,
+            GuitarRhythmPattern.PRESET_ROCK,
+            BassRhythmPattern.PRESET_ROCK,
+            KeyboardRhythmPattern.PRESET_ROCK,
             30, 34, 17);
 
     private final String label;
