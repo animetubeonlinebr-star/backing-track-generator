@@ -4,6 +4,7 @@ import br.com.marcosbassetto.model.keyboard.KeyboardConfig;
 import br.com.marcosbassetto.model.keyboard.KeyboardRhythmPattern;
 import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.presentation.theme.AppTheme;
 
 import javax.swing.*;
 import java.awt.*;
@@ -76,6 +77,7 @@ public class KeyboardConfigWindow extends JDialog {
         pack();
         setMinimumSize(new Dimension(480, 360));
         setResizable(false);
+        setIconImages(AppTheme.loadWindowIcons("keyboard"));
         setLocationRelativeTo(owner);
     }
 

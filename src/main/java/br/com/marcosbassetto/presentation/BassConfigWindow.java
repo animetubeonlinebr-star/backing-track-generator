@@ -4,6 +4,7 @@ import br.com.marcosbassetto.model.bass.BassConfig;
 import br.com.marcosbassetto.model.bass.BassRhythmPattern;
 import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.presentation.theme.AppTheme;
 
 import javax.swing.*;
 import java.awt.*;
@@ -53,6 +54,7 @@ public class BassConfigWindow extends JDialog {
         pack();
         setMinimumSize(new Dimension(460, 300));
         setResizable(false);
+        setIconImages(AppTheme.loadWindowIcons("bass"));
         setLocationRelativeTo(owner);
     }
 

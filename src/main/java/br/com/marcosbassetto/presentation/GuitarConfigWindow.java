@@ -5,6 +5,7 @@ import br.com.marcosbassetto.model.guitar.GuitarConfig;
 import br.com.marcosbassetto.model.guitar.GuitarRhythmPattern;
 import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
+import br.com.marcosbassetto.presentation.theme.AppTheme;
 
 import javax.swing.*;
 import java.awt.*;
@@ -39,6 +40,7 @@ public class GuitarConfigWindow extends JDialog {
         setLayout(new BorderLayout(10, 10));
         setSize(420, 320);
         setResizable(false);
+        setIconImages(AppTheme.loadWindowIcons("guitar"));
         setLocationRelativeTo(owner);
 
         JPanel fields = new JPanel(new GridLayout(0, 2, 10, 8));

@@ -4,6 +4,7 @@ import br.com.marcosbassetto.model.drum.DrumConfig;
 import br.com.marcosbassetto.model.music.Intensity;
 import br.com.marcosbassetto.model.music.TimeSignatureInfo;
 import br.com.marcosbassetto.presentation.components.SequencerPanel;
+import br.com.marcosbassetto.presentation.theme.AppTheme;
 
 import javax.swing.*;
 import java.awt.*;
@@ -58,6 +59,7 @@ public class DrumConfigWindow extends JDialog {
 
         pack();
         setMinimumSize(new Dimension(650, 420));
+        setIconImages(AppTheme.loadWindowIcons("drum"));
         setLocationRelativeTo(owner);
     }
 

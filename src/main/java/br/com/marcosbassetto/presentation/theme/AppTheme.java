@@ -1,6 +1,12 @@
 package br.com.marcosbassetto.presentation.theme;
 
+import javax.swing.ImageIcon;
 import java.awt.*;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class AppTheme {
 
@@ -30,4 +36,46 @@ public final class AppTheme {
     public static final int BEAT_GAP = 14;
     public static final int INSTRUMENT_COL_WIDTH = 140;
     public static final int HEADER_HEIGHT = 60;
+
+    /**
+     * Tamanhos usuais de ícone de janela: barra de título, barra de tarefas e
+     * telas com escala alta. O sistema escolhe o mais adequado.
+     */
+    private static final int[] ICON_SIZES = {16, 24, 32, 48, 64};
+
+    private static final Map<String, List<Image>> ICON_CACHE = new ConcurrentHashMap<>();
+
+    /**
+     * Carrega as imagens de {@code /img/<nome>.jpg} já reduzidas aos tamanhos
+     * usuais de ícone de janela.
+     *
+     * <p>Os arquivos de origem são grandes (1024×1024), então reduzi-los aqui
+     * evita manter um bitmap de vários MB em memória por janela aberta. O
+     * resultado é cacheado por nome.
+     *
+     * @return lista de imagens, ou lista vazia quando o recurso não existe — o
+     *         chamador apenas ignora o ícone em vez de quebrar
+     */
+    public static List<Image> loadWindowIcons(String nome) {
+        return ICON_CACHE.computeIfAbsent(nome, AppTheme::scaleWindowIcons);
+    }
+
+    private static List<Image> scaleWindowIcons(String nome) {
+        URL url = AppTheme.class.getResource("/img/" + nome + ".jpg");
+        if (url == null) {
+            System.err.println("Imagem não encontrada em /img/" + nome + ".jpg");
+            return List.of();
+        }
+        Image original = new ImageIcon(url).getImage();
+        List<Image> icons = new ArrayList<>(ICON_SIZES.length);
+        for (int size : ICON_SIZES) {
+            Image scaled = original.getScaledInstance(size, size, Image.SCALE_SMOOTH);
+            // getScaledInstance devolve uma imagem preguiçosa: getWidth(null)
+            // retorna -1 até ela ser materializada. Envolver num ImageIcon
+            // força a carga, senão o seletor de ícone do sistema pode não
+            // reconhecer o tamanho.
+            icons.add(new ImageIcon(scaled).getImage());
+        }
+        return icons;
+    }
 }
