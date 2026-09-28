@@ -2,6 +2,7 @@ package br.com.marcosbassetto.presentation;
 
 import br.com.marcosbassetto.model.drum.DrumConfig;
 import br.com.marcosbassetto.model.drum.DrumInstrument;
+import br.com.marcosbassetto.presentation.theme.AppTheme;
 
 import javax.swing.*;
 import java.awt.*;
@@ -21,6 +22,7 @@ public class DrumMidiConfigWindow extends JDialog {
 
         setLayout(new BorderLayout(10, 10));
         setSize(420, 480);
+        setIconImages(AppTheme.loadWindowIcons("drum"));
         setLocationRelativeTo(owner);
         setResizable(false);
 
